@@ -736,6 +736,7 @@ statement_ai/
 ├── .env.example             # Template for required environment variables
 ├── docker-compose.yml
 ├── Dockerfile
+├── LICENSE                  # MIT License
 └── requirements.txt
 ```
 
