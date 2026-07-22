@@ -96,17 +96,9 @@
 ```bash
 git clone https://github.com/<your-username>/statement-ai.git
 cd statement-ai
-touch .env   # no .env.example ships in this repo yet — create the file yourself, see below
+cp .env.example .env   # then fill in your own values
 sudo docker compose up -d --build
 sudo docker compose exec web python manage.py migrate
-```
-
-At minimum, your `.env` needs:
-
-```env
-GEMINI_API_KEY=your-gemini-api-key
-SECRET_KEY=a-long-random-string
-DEBUG=1
 ```
 
 The API is then available at `http://localhost:8000/api/`.
@@ -127,7 +119,7 @@ The API is then available at `http://localhost:8000/api/`.
 
 > ⚠️ **Important:** Never commit your `.env` file. Rotate `SECRET_KEY` and `GEMINI_API_KEY` immediately if they are ever exposed.
 
-> 🛠️ **Current limitation:** as of this codebase, `docker-compose.yml` only forwards `DEBUG`, `SECRET_KEY`, `GEMINI_API_KEY`, and `DATA_RETENTION_DAYS` into the `web`/`cron` containers. `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` are read by Django (`settings.py`) but are **not yet passed through** in `docker-compose.yml` — setting them in `.env` currently has no effect until you also add them to the `environment:` blocks for `web` and `cron`. Likewise, the `db` service hardcodes `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` directly in `docker-compose.yml` rather than reading them from `.env` — the values in the table above only match because they happen to equal Django's fallback defaults. To actually customize any of these, edit `docker-compose.yml` directly (or add an `env_file: .env` directive) rather than relying on `.env` alone.
+> ✅ All variables in the table above — including `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and the `POSTGRES_*` credentials — are now forwarded from `.env` into the `web`, `cron`, and `db` containers via `docker-compose.yml`. Changing a value in `.env` and running `sudo docker compose up -d --build` is sufficient; you no longer need to edit `docker-compose.yml` by hand.
 
 <details>
 <summary><b>⏱️ Scheduled Data Retention Cleanup</b> (click to expand)</summary>
@@ -741,6 +733,7 @@ statement_ai/
 ├── cron/
 │   ├── entrypoint.sh        # Cron sidecar entrypoint
 │   └── statement-ai-cron    # Crontab: daily retention cleanup schedule
+├── .env.example             # Template for required environment variables
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt

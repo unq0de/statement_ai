@@ -12,6 +12,11 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-365}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      - POSTGRES_DB=${POSTGRES_DB:-statement_ai_db}
+      - POSTGRES_USER=${POSTGRES_USER:-statement_ai_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-statement_ai_password}
     depends_on:
       - db
 
@@ -26,15 +31,20 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-365}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      - POSTGRES_DB=${POSTGRES_DB:-statement_ai_db}
+      - POSTGRES_USER=${POSTGRES_USER:-statement_ai_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-statement_ai_password}
     depends_on:
       - db
 
   db:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=statement_ai_db
-      - POSTGRES_USER=statement_ai_user
-      - POSTGRES_PASSWORD=statement_ai_password
+      - POSTGRES_DB=${POSTGRES_DB:-statement_ai_db}
+      - POSTGRES_USER=${POSTGRES_USER:-statement_ai_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-statement_ai_password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
