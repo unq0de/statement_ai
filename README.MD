@@ -96,9 +96,17 @@
 ```bash
 git clone https://github.com/<your-username>/statement-ai.git
 cd statement-ai
-cp .env.example .env   # then fill in your own values
+touch .env   # no .env.example ships in this repo yet — create the file yourself, see below
 sudo docker compose up -d --build
 sudo docker compose exec web python manage.py migrate
+```
+
+At minimum, your `.env` needs:
+
+```env
+GEMINI_API_KEY=your-gemini-api-key
+SECRET_KEY=a-long-random-string
+DEBUG=1
 ```
 
 The API is then available at `http://localhost:8000/api/`.
@@ -118,6 +126,8 @@ The API is then available at `http://localhost:8000/api/`.
 | `DATA_RETENTION_DAYS` | Days a bank statement is kept before it becomes eligible for automatic deletion | `365` |
 
 > ⚠️ **Important:** Never commit your `.env` file. Rotate `SECRET_KEY` and `GEMINI_API_KEY` immediately if they are ever exposed.
+
+> 🛠️ **Current limitation:** as of this codebase, `docker-compose.yml` only forwards `DEBUG`, `SECRET_KEY`, `GEMINI_API_KEY`, and `DATA_RETENTION_DAYS` into the `web`/`cron` containers. `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` are read by Django (`settings.py`) but are **not yet passed through** in `docker-compose.yml` — setting them in `.env` currently has no effect until you also add them to the `environment:` blocks for `web` and `cron`. Likewise, the `db` service hardcodes `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` directly in `docker-compose.yml` rather than reading them from `.env` — the values in the table above only match because they happen to equal Django's fallback defaults. To actually customize any of these, edit `docker-compose.yml` directly (or add an `env_file: .env` directive) rather than relying on `.env` alone.
 
 <details>
 <summary><b>⏱️ Scheduled Data Retention Cleanup</b> (click to expand)</summary>
@@ -362,7 +372,13 @@ The individually detected transactions are **not** included directly in this res
 | `500 Internal Server Error` | AI processing failed (e.g. unreadable PDF). In this case the bank statement is automatically deleted again, so no incomplete records are left behind. |
 
 ```json
+{ "error": "No file uploaded (field 'file' is required)." }
+```
+```json
 { "error": "Only PDF files are allowed." }
+```
+```json
+{ "error": "File too large (max. 10 MB)." }
 ```
 
 </details>
@@ -585,6 +601,10 @@ Permanently deletes the authenticated user's account, including all bank stateme
 
 - `400 Bad Request` – Password missing or incorrect.
 
+```json
+{ "error": "Incorrect password." }
+```
+
 ⚠️ **Warning:** This action cannot be undone. The access/refresh tokens become invalid immediately since the underlying user no longer exists.
 
 </details>
@@ -616,6 +636,8 @@ Permanently deletes the authenticated user's account, including all bank stateme
 | `category` | string (enum) | One of: `Housing & Utilities`, `Groceries & Food`, `Dining Out & Cafes`, `Transportation`, `Shopping & Retail`, `Subscriptions & Media`, `Health & Medical`, `Financial & Insurance`, `Salary & Main Income`, `Secondary Income`, `Transfers & P2P`, `Education & Childcare`, `Travel & Vacations`, `Cash & ATM`, `Miscellaneous & Other` |
 
 > All AI-generated text (`description`, `ai_evaluation`) is always in **English**, regardless of the language of the original PDF.
+
+> ℹ️ Note: `transaction_type` is a real database-level enum (Django `choices`). `category`, however, is a free-text field at the database level (default `"Uncategorized"`) — the 15 categories above are enforced only by the instructions given to Gemini in the AI prompt, not by a DB constraint.
 
 </details>
 
