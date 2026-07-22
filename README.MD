@@ -1,4 +1,101 @@
-# Statement AI – API Documentation
+# Statement AI
+
+AI-powered REST API that reads bank statement PDFs, extracts and categorizes every transaction, and generates a financial summary — built with Django REST Framework and Google Gemini.
+
+![Python](https://img.shields.io/badge/python-3.11-blue)
+![Django](https://img.shields.io/badge/django-4.2-092E20?logo=django&logoColor=white)
+![DRF](https://img.shields.io/badge/DRF-3.14-red)
+![Gemini](https://img.shields.io/badge/AI-Google%20Gemini-8E75B2)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Environment Variables](#environment-variables)
+- [API Reference](#api-reference)
+  1. [Authentication](#1-authentication)
+  2. [Endpoints Overview](#2-endpoints-overview)
+  3. [Register a User](#3-register-a-user)
+  4. [Login (Obtain Token)](#4-login-obtain-token)
+  5. [Refresh Token](#5-refresh-token)
+  6. [Upload a Bank Statement](#6-upload-a-bank-statement)
+  7. [List Bank Statements](#7-list-bank-statements)
+  8. [Delete a Bank Statement](#8-delete-a-bank-statement)
+  9. [Delete All Bank Statements](#9-delete-all-bank-statements)
+  10. [List Transactions](#10-list-transactions)
+  11. [Analytics (AI Evaluations)](#11-analytics-ai-evaluations)
+  12. [Data Models](#12-data-models)
+  13. [Error Format](#13-error-format)
+  14. [Typical Flow (End-to-End Example)](#14-typical-flow-end-to-end-example)
+- [Project Structure](#project-structure)
+- [License](#license)
+
+---
+
+## Features
+
+- 🔐 JWT-based authentication (access + refresh tokens)
+- 📄 PDF bank statement upload with type & size validation
+- 🤖 Automatic transaction extraction and categorization via Google Gemini
+- 📊 AI-generated financial summary per statement
+- 🗂️ Per-user data isolation — every user only ever sees their own statements and transactions
+- 🐳 Fully dockerized (Django + PostgreSQL)
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Django 4.2 + Django REST Framework |
+| Auth | `djangorestframework-simplejwt` |
+| Database | PostgreSQL 15 |
+| AI | Google Gemini (`gemini-2.5-flash`) |
+| Deployment | Docker / Docker Compose |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Docker & Docker Compose
+- A [Google Gemini API key](https://aistudio.google.com/apikey)
+
+### Installation
+
+```bash
+git clone https://github.com/<your-username>/statement-ai.git
+cd statement-ai
+cp .env.example .env   # then fill in your own values
+sudo docker compose up -d --build
+sudo docker compose exec web python manage.py migrate
+```
+
+The API is then available at `http://localhost:8000/api/`.
+
+### Environment Variables
+
+| Variable | Description | Example |
+|---|---|---|
+| `SECRET_KEY` | Django secret key | `django-insecure-...` |
+| `DEBUG` | `1` for development, `0` for production | `0` |
+| `GEMINI_API_KEY` | Your Google Gemini API key | `AI...` |
+| `POSTGRES_DB` | Database name | `statement_ai_db` |
+| `POSTGRES_USER` | Database user | `statement_ai_user` |
+| `POSTGRES_PASSWORD` | Database password | `********` |
+| `ALLOWED_HOSTS` | Comma-separated hosts (production only) | `api.example.com` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated origins (production only) | `https://app.example.com` |
+
+> ⚠️ Never commit your `.env` file. Rotate `SECRET_KEY` and `GEMINI_API_KEY` immediately if they are ever exposed.
+
+---
+
+## API Reference
 
 Statement AI is a REST API for uploading bank statements (PDF), which are automatically read, categorized, and converted into structured transactions using Google Gemini.
 
@@ -6,28 +103,7 @@ Statement AI is a REST API for uploading bank statements (PDF), which are automa
 - **Format:** JSON (exception: file upload as `multipart/form-data`)
 - **Authentication:** JWT (Bearer Token)
 
----
-
-## Table of Contents
-
-1. [Authentication](#1-authentication)
-2. [Endpoints Overview](#2-endpoints-overview)
-3. [Register a User](#3-register-a-user)
-4. [Login (Obtain Token)](#4-login-obtain-token)
-5. [Refresh Token](#5-refresh-token)
-6. [Upload a Bank Statement](#6-upload-a-bank-statement)
-7. [List Bank Statements](#7-list-bank-statements)
-8. [Delete a Bank Statement](#8-delete-a-bank-statement)
-9. [Delete All Bank Statements](#9-delete-all-bank-statements)
-10. [List Transactions](#10-list-transactions)
-11. [Analytics (AI Evaluations)](#11-analytics-ai-evaluations)
-12. [Data Models](#12-data-models)
-13. [Error Format](#13-error-format)
-14. [Typical Flow (End-to-End Example)](#14-typical-flow-end-to-end-example)
-
----
-
-## 1. Authentication
+### 1. Authentication
 
 The API uses **JWT (JSON Web Tokens)** via [`djangorestframework-simplejwt`](https://django-rest-framework-simplejwt.readthedocs.io/).
 
@@ -46,9 +122,7 @@ Once the access token expires, use the [refresh endpoint](#5-refresh-token) to o
 
 All endpoints except registration and login require a valid access token. Without a (valid) token, the API responds with `401 Unauthorized`.
 
----
-
-## 2. Endpoints Overview
+### 2. Endpoints Overview
 
 | Method | Path | Auth Required | Description |
 |---|---|---|---|
@@ -62,16 +136,14 @@ All endpoints except registration and login require a valid access token. Withou
 | `DELETE` | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
 | `GET` | `/api/transactions/` | Yes | List your own transactions |
 
----
-
-## 3. Register a User
+### 3. Register a User
 
 Creates a new user account.
 
 **Endpoint:** `POST /api/auth/register/`
 **Auth:** not required
 
-### Request Body
+**Request Body**
 
 ```json
 {
@@ -87,7 +159,7 @@ Creates a new user account.
 | `email` | string | No | Email address |
 | `password` | string | Yes | Must satisfy Django's password rules (minimum length, not too similar to the username, not a common password, not entirely numeric) |
 
-### Response `201 Created`
+**Response `201 Created`**
 
 ```json
 {
@@ -96,7 +168,7 @@ Creates a new user account.
 }
 ```
 
-### Error Cases
+**Error Cases**
 
 - `400 Bad Request` – Username already taken, password too weak, required field missing.
 
@@ -106,16 +178,14 @@ Creates a new user account.
 }
 ```
 
----
-
-## 4. Login (Obtain Token)
+### 4. Login (Obtain Token)
 
 Exchanges username + password for a token pair.
 
 **Endpoint:** `POST /api/auth/login/`
 **Auth:** not required
 
-### Request Body
+**Request Body**
 
 ```json
 {
@@ -124,7 +194,7 @@ Exchanges username + password for a token pair.
 }
 ```
 
-### Response `200 OK`
+**Response `200 OK`**
 
 ```json
 {
@@ -133,20 +203,18 @@ Exchanges username + password for a token pair.
 }
 ```
 
-### Error Cases
+**Error Cases**
 
 - `401 Unauthorized` – Username or password incorrect.
 
----
-
-## 5. Refresh Token
+### 5. Refresh Token
 
 Issues a new access token from a valid refresh token.
 
 **Endpoint:** `POST /api/auth/refresh/`
 **Auth:** not required (refresh token in the body)
 
-### Request Body
+**Request Body**
 
 ```json
 {
@@ -154,7 +222,7 @@ Issues a new access token from a valid refresh token.
 }
 ```
 
-### Response `200 OK`
+**Response `200 OK`**
 
 ```json
 {
@@ -162,13 +230,11 @@ Issues a new access token from a valid refresh token.
 }
 ```
 
-### Error Cases
+**Error Cases**
 
 - `401 Unauthorized` – Refresh token expired or invalid → user must log in again.
 
----
-
-## 6. Upload a Bank Statement
+### 6. Upload a Bank Statement
 
 Uploads a PDF file, has it analyzed by Gemini AI, and automatically saves the detected transactions to the database. This request can take a few seconds depending on file size, since it waits synchronously for the AI response.
 
@@ -176,7 +242,7 @@ Uploads a PDF file, has it analyzed by Gemini AI, and automatically saves the de
 **Auth:** required
 **Content-Type:** `multipart/form-data`
 
-### Request
+**Request**
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -188,7 +254,7 @@ Uploads a PDF file, has it analyzed by Gemini AI, and automatically saves the de
 - Only `application/pdf` is accepted.
 - Maximum file size: **10 MB**.
 
-### Example (cURL)
+**Example (cURL)**
 
 ```bash
 curl -X POST http://localhost:8000/api/statements/upload/ \
@@ -196,7 +262,7 @@ curl -X POST http://localhost:8000/api/statements/upload/ \
   -F "file=@statement_july.pdf"
 ```
 
-### Response `201 Created`
+**Response `201 Created`**
 
 ```json
 {
@@ -208,7 +274,7 @@ curl -X POST http://localhost:8000/api/statements/upload/ \
 
 The individually detected transactions are **not** included directly in this response — retrieve them afterwards via [`GET /api/transactions/`](#10-list-transactions).
 
-### Error Cases
+**Error Cases**
 
 | Status | Cause |
 |---|---|
@@ -220,16 +286,14 @@ The individually detected transactions are **not** included directly in this res
 { "error": "Only PDF files are allowed." }
 ```
 
----
-
-## 7. List Bank Statements
+### 7. List Bank Statements
 
 Lists all bank statements of the logged-in user, newest first.
 
 **Endpoint:** `GET /api/statements/`
 **Auth:** required
 
-### Response `200 OK`
+**Response `200 OK`**
 
 ```json
 [
@@ -256,23 +320,21 @@ Lists all bank statements of the logged-in user, newest first.
 
 > Each bank statement is returned together with its associated transactions. You only ever see your own bank statements — other users' data is not visible.
 
----
-
-## 8. Delete a Bank Statement
+### 8. Delete a Bank Statement
 
 Deletes a single bank statement, including its file and all associated transactions (cascade).
 
 **Endpoint:** `DELETE /api/statements/<int:pk>/`
 **Auth:** required
 
-### Example
+**Example**
 
 ```bash
 curl -X DELETE http://localhost:8000/api/statements/14/ \
   -H "Authorization: Bearer <access_token>"
 ```
 
-### Response `200 OK`
+**Response `200 OK`**
 
 ```json
 {
@@ -280,13 +342,11 @@ curl -X DELETE http://localhost:8000/api/statements/14/ \
 }
 ```
 
-### Error Cases
+**Error Cases**
 
 - `404 Not Found` – No bank statement with this ID (or it belongs to another user).
 
----
-
-## 9. Delete All Bank Statements
+### 9. Delete All Bank Statements
 
 Permanently deletes **all** bank statements and transactions of the logged-in user, including the physical PDF files.
 
@@ -295,7 +355,7 @@ Permanently deletes **all** bank statements and transactions of the logged-in us
 
 ⚠️ **Warning:** This action cannot be undone.
 
-### Response `200 OK`
+**Response `200 OK`**
 
 ```json
 {
@@ -303,16 +363,14 @@ Permanently deletes **all** bank statements and transactions of the logged-in us
 }
 ```
 
----
-
-## 10. List Transactions
+### 10. List Transactions
 
 Lists all transactions from all bank statements of the logged-in user, sorted by date (newest first).
 
 **Endpoint:** `GET /api/transactions/`
 **Auth:** required
 
-### Response `200 OK`
+**Response `200 OK`**
 
 ```json
 [
@@ -339,16 +397,14 @@ Lists all transactions from all bank statements of the logged-in user, sorted by
 
 > There are currently no filter or pagination parameters — the endpoint always returns the complete list of all the user's transactions.
 
----
-
-## 11. Analytics (AI Evaluations)
+### 11. Analytics (AI Evaluations)
 
 Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statements that have already been successfully processed.
 
 **Endpoint:** `GET /api/statements/analytics/`
 **Auth:** required
 
-### Response `200 OK`
+**Response `200 OK`**
 
 ```json
 {
@@ -361,11 +417,9 @@ Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statement
 
 > Only includes bank statements with `is_processed = true` **and** an existing `ai_evaluation`. Statements that have not yet been processed, or that failed to upload, do not appear here.
 
----
+### 12. Data Models
 
-## 12. Data Models
-
-### BankStatement
+**BankStatement**
 
 | Field | Type | Description |
 |---|---|---|
@@ -376,7 +430,7 @@ Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statement
 | `ai_evaluation` | string \| null | Free-text summary from the AI (always in English) |
 | `transactions` | Transaction[] | Associated transactions (only included in the list view) |
 
-### Transaction
+**Transaction**
 
 | Field | Type | Description |
 |---|---|---|
@@ -390,9 +444,7 @@ Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statement
 
 > All AI-generated text (`description`, `ai_evaluation`) is always in **English**, regardless of the language of the original PDF.
 
----
-
-## 13. Error Format
+### 13. Error Format
 
 Errors are returned consistently as a JSON object with an `error` field (exception: registration validation errors, which are field-specific):
 
@@ -407,9 +459,7 @@ Errors are returned consistently as a JSON object with an `error` field (excepti
 | `404 Not Found` | Resource does not exist or belongs to another user |
 | `500 Internal Server Error` | Unexpected server error (e.g. AI processing failed) |
 
----
-
-## 14. Typical Flow (End-to-End Example)
+### 14. Typical Flow (End-to-End Example)
 
 ```bash
 # 1. Register
@@ -453,3 +503,26 @@ curl -X DELETE http://localhost:8000/api/statements/14/ \
 curl -X DELETE http://localhost:8000/api/statements/delete-all/ \
   -H "Authorization: Bearer <access_token>"
 ```
+
+---
+
+## Project Structure
+
+```
+statement_ai/
+├── statement_ai/          # Django project (settings, urls, wsgi)
+├── statements/             # Main app
+│   ├── models.py           # BankStatement & Transaction models
+│   ├── serializers.py      # DRF serializers
+│   ├── services.py         # Gemini AI integration
+│   ├── views.py            # API views
+│   ├── urls.py              # App-level routes
+│   └── migrations/
+├── docker-compose.yml
+├── Dockerfile
+└── requirements.txt
+```
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
