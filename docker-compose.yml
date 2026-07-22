@@ -11,6 +11,21 @@ services:
       - DEBUG=${DEBUG}
       - SECRET_KEY=${SECRET_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-365}
+    depends_on:
+      - db
+
+  cron:
+    build: .
+    command: [ "sh", "/app/cron/entrypoint.sh" ]
+    volumes:
+      - .:/app
+      - media_data:/app/media
+    environment:
+      - DEBUG=${DEBUG}
+      - SECRET_KEY=${SECRET_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-365}
     depends_on:
       - db
 

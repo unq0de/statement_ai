@@ -8,6 +8,11 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-secret-key')
 DEBUG = os.environ.get('DEBUG', '0') == '1'
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
+# GDPR: max. number of days a bank statement (incl. PDF + transactions) is
+# retained before it becomes eligible for deletion by the
+# `delete_expired_data` management command.
+DATA_RETENTION_DAYS = int(os.environ.get('DATA_RETENTION_DAYS') or 365)
+
 if not DEBUG:
     if not SECRET_KEY or SECRET_KEY == 'fallback-secret-key':
         raise RuntimeError("SECRET_KEY must be set via environment variable in production.")

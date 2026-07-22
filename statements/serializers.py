@@ -21,6 +21,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             password=validated_data['password']
         )
 
+class AccountDeleteSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True)
+
 class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction

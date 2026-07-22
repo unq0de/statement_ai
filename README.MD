@@ -18,6 +18,8 @@ AI-powered REST API that reads bank statement PDFs, extracts and categorizes eve
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Environment Variables](#environment-variables)
+  - [Scheduled Data Retention Cleanup](#scheduled-data-retention-cleanup)
+- [Privacy & GDPR](#privacy--gdpr)
 - [API Reference](#api-reference)
   1. [Authentication](#1-authentication)
   2. [Endpoints Overview](#2-endpoints-overview)
@@ -30,9 +32,12 @@ AI-powered REST API that reads bank statement PDFs, extracts and categorizes eve
   9. [Delete All Bank Statements](#9-delete-all-bank-statements)
   10. [List Transactions](#10-list-transactions)
   11. [Analytics (AI Evaluations)](#11-analytics-ai-evaluations)
-  12. [Data Models](#12-data-models)
-  13. [Error Format](#13-error-format)
-  14. [Typical Flow (End-to-End Example)](#14-typical-flow-end-to-end-example)
+  12. [Download the Original PDF](#12-download-the-original-pdf)
+  13. [Export My Data](#13-export-my-data)
+  14. [Delete My Account](#14-delete-my-account)
+  15. [Data Models](#15-data-models)
+  16. [Error Format](#16-error-format)
+  17. [Typical Flow (End-to-End Example)](#17-typical-flow-end-to-end-example)
 - [Project Structure](#project-structure)
 - [License](#license)
 
@@ -45,6 +50,9 @@ AI-powered REST API that reads bank statement PDFs, extracts and categorizes eve
 - 🤖 Automatic transaction extraction and categorization via Google Gemini
 - 📊 AI-generated financial summary per statement
 - 🗂️ Per-user data isolation — every user only ever sees their own statements and transactions
+- 🔒 Authenticated, ownership-checked file downloads — original PDFs are never publicly reachable
+- 🗑️ Full account erasure and configurable data retention (GDPR Art. 17)
+- 📤 Personal data export as JSON (GDPR Art. 15/20)
 - 🐳 Fully dockerized (Django + PostgreSQL)
 
 ## Tech Stack
@@ -90,8 +98,47 @@ The API is then available at `http://localhost:8000/api/`.
 | `POSTGRES_PASSWORD` | Database password | `********` |
 | `ALLOWED_HOSTS` | Comma-separated hosts (production only) | `api.example.com` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated origins (production only) | `https://app.example.com` |
+| `DATA_RETENTION_DAYS` | Days a bank statement is kept before it becomes eligible for automatic deletion | `365` |
 
 > ⚠️ Never commit your `.env` file. Rotate `SECRET_KEY` and `GEMINI_API_KEY` immediately if they are ever exposed.
+
+### Scheduled Data Retention Cleanup
+
+Bank statements older than `DATA_RETENTION_DAYS` are cleaned up automatically by a dedicated `cron` service in `docker-compose.yml`. It runs the same image as `web`, but only executes `manage.py delete_expired_data` on a daily schedule (`cron/statement-ai-cron`, default `03:00`) and otherwise stays idle. It starts automatically with:
+
+```bash
+sudo docker compose up -d --build
+```
+
+Check that it's running and inspect its logs with:
+
+```bash
+sudo docker compose logs -f cron
+```
+
+To change the schedule, edit `cron/statement-ai-cron` and rebuild the `cron` service. You can also trigger a cleanup manually at any time — either via the `web` or the `cron` service, both share the same code and database:
+
+```bash
+sudo docker compose exec cron python manage.py delete_expired_data
+```
+
+This permanently deletes every bank statement (and its transactions and PDF file) whose `uploaded_at` is older than the configured retention period.
+
+> If you'd rather not run the sidecar container, remove the `cron` service from `docker-compose.yml` and schedule `docker compose exec web python manage.py delete_expired_data` via the host's system cron instead.
+
+---
+
+## Privacy & GDPR
+
+Statement AI processes financial data extracted from bank statements, which is personal data under the GDPR. The following measures are implemented:
+
+- **Data minimization & retention** — statements are automatically eligible for deletion after `DATA_RETENTION_DAYS` (see above).
+- **Right to erasure** — [`DELETE /api/auth/account/`](#14-delete-my-account) permanently removes the user account together with all statements, transactions, and uploaded PDF files.
+- **Right of access / portability** — [`GET /api/auth/export/`](#13-export-my-data) returns all personal data held about the authenticated user as JSON.
+- **Access control** — uploaded PDFs are never served from a public path. They can only be retrieved via the authenticated, ownership-checked [file download endpoint](#12-download-the-original-pdf).
+- **Third-country data transfer** — bank statement content is sent to **Google Gemini** (Google LLC, USA) for AI processing. If you operate this API for real users in the EU/EEA, you are responsible for having a valid legal basis and a Data Processing Agreement (DPA) with Google covering this transfer before going to production.
+
+This section describes the technical measures available in the API. It is not legal advice — consult a data protection professional before processing real users' financial data in production.
 
 ---
 
@@ -129,11 +176,14 @@ All endpoints except registration and login require a valid access token. Withou
 | `POST` | `/api/auth/register/` | No | Register a new user |
 | `POST` | `/api/auth/login/` | No | Obtain access & refresh tokens |
 | `POST` | `/api/auth/refresh/` | No (refresh token required) | Obtain a new access token |
+| `DELETE` | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
+| `GET` | `/api/auth/export/` | Yes | Export all personal data as JSON |
 | `GET` | `/api/statements/` | Yes | List your own bank statements |
 | `POST` | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
 | `GET` | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
 | `DELETE` | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
 | `DELETE` | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
+| `GET` | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
 | `GET` | `/api/transactions/` | Yes | List your own transactions |
 
 ### 3. Register a User
@@ -318,7 +368,7 @@ Lists all bank statements of the logged-in user, newest first.
 ]
 ```
 
-> Each bank statement is returned together with its associated transactions. You only ever see your own bank statements — other users' data is not visible.
+> Each bank statement is returned together with its associated transactions. You only ever see your own bank statements — other users' data is not visible. Note that the `file` path is only reachable directly when `DEBUG=1`; in production, use the [file download endpoint](#12-download-the-original-pdf) instead.
 
 ### 8. Delete a Bank Statement
 
@@ -417,15 +467,90 @@ Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statement
 
 > Only includes bank statements with `is_processed = true` **and** an existing `ai_evaluation`. Statements that have not yet been processed, or that failed to upload, do not appear here.
 
-### 12. Data Models
+### 12. Download the Original PDF
+
+Streams the original uploaded PDF file of a bank statement. This is the only supported way to retrieve the file in production, since `/media/` is not publicly exposed there.
+
+**Endpoint:** `GET /api/statements/<int:pk>/file/`
+**Auth:** required
+
+**Example**
+
+```bash
+curl -OJ http://localhost:8000/api/statements/14/file/ \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**Response `200 OK`** — binary PDF (`Content-Type: application/pdf`, downloaded as an attachment).
+
+**Error Cases**
+
+- `404 Not Found` – No bank statement with this ID, it belongs to another user, or it has no file attached.
+
+### 13. Export My Data
+
+Returns all personal data stored about the authenticated user — profile info plus every bank statement and its transactions — as a single JSON document (GDPR Art. 15 right of access / Art. 20 data portability). Original PDF files are referenced by download URL rather than embedded.
+
+**Endpoint:** `GET /api/auth/export/`
+**Auth:** required
+
+**Response `200 OK`**
+
+```json
+{
+  "user": {
+    "username": "max.mustermann",
+    "email": "max@example.com",
+    "date_joined": "2026-01-10T09:15:00Z"
+  },
+  "statements": [
+    {
+      "id": 14,
+      "file": "/media/statements/2026/07/statement_july.pdf",
+      "uploaded_at": "2026-07-22T18:32:10Z",
+      "is_processed": true,
+      "ai_evaluation": "This statement shows a healthy balance...",
+      "transactions": [ ],
+      "file_download_url": "/api/statements/14/file/"
+    }
+  ]
+}
+```
+
+### 14. Delete My Account
+
+Permanently deletes the authenticated user's account, including all bank statements, transactions, and uploaded PDF files (GDPR Art. 17 right to erasure). Requires the current password as confirmation.
+
+**Endpoint:** `DELETE /api/auth/account/`
+**Auth:** required
+
+**Request Body**
+
+```json
+{ "password": "ASecurePassword123" }
+```
+
+**Response `200 OK`**
+
+```json
+{ "message": "Your account and all associated data were permanently deleted." }
+```
+
+**Error Cases**
+
+- `400 Bad Request` – Password missing or incorrect.
+
+⚠️ **Warning:** This action cannot be undone. The access/refresh tokens become invalid immediately since the underlying user no longer exists.
+
+### 15. Data Models
 
 **BankStatement**
 
 | Field | Type | Description |
 |---|---|---|
 | `id` | integer | Unique ID |
-| `file` | string (URL) | Path/URL to the stored PDF file |
-| `uploaded_at` | datetime (ISO 8601, UTC) | Upload timestamp |
+| `file` | string (URL) | Path/URL to the stored PDF file (use the [download endpoint](#12-download-the-original-pdf) in production) |
+| `uploaded_at` | datetime (ISO 8601, UTC) | Upload timestamp; also the basis for the retention cleanup |
 | `is_processed` | boolean | `true` once AI processing has completed successfully |
 | `ai_evaluation` | string \| null | Free-text summary from the AI (always in English) |
 | `transactions` | Transaction[] | Associated transactions (only included in the list view) |
@@ -444,7 +569,7 @@ Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statement
 
 > All AI-generated text (`description`, `ai_evaluation`) is always in **English**, regardless of the language of the original PDF.
 
-### 13. Error Format
+### 16. Error Format
 
 Errors are returned consistently as a JSON object with an `error` field (exception: registration validation errors, which are field-specific):
 
@@ -459,7 +584,7 @@ Errors are returned consistently as a JSON object with an `error` field (excepti
 | `404 Not Found` | Resource does not exist or belongs to another user |
 | `500 Internal Server Error` | Unexpected server error (e.g. AI processing failed) |
 
-### 14. Typical Flow (End-to-End Example)
+### 17. Typical Flow (End-to-End Example)
 
 ```bash
 # 1. Register
@@ -490,18 +615,32 @@ curl http://localhost:8000/api/transactions/ \
 curl http://localhost:8000/api/statements/analytics/ \
   -H "Authorization: Bearer <access_token>"
 
-# 7. Refresh the token once the access token expires
+# 7. Download the original PDF of a statement
+curl -OJ http://localhost:8000/api/statements/14/file/ \
+  -H "Authorization: Bearer <access_token>"
+
+# 8. Export all of my personal data
+curl http://localhost:8000/api/auth/export/ \
+  -H "Authorization: Bearer <access_token>"
+
+# 9. Refresh the token once the access token expires
 curl -X POST http://localhost:8000/api/auth/refresh/ \
   -H "Content-Type: application/json" \
   -d '{"refresh": "<refresh_token>"}'
 
-# 8. Delete a single bank statement
+# 10. Delete a single bank statement
 curl -X DELETE http://localhost:8000/api/statements/14/ \
   -H "Authorization: Bearer <access_token>"
 
-# 9. Delete everything (warning: irreversible!)
+# 11. Delete all bank statements (warning: irreversible!)
 curl -X DELETE http://localhost:8000/api/statements/delete-all/ \
   -H "Authorization: Bearer <access_token>"
+
+# 12. Delete my entire account (warning: irreversible!)
+curl -X DELETE http://localhost:8000/api/auth/account/ \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"password": "ASecurePassword123!"}'
 ```
 
 ---
@@ -517,7 +656,13 @@ statement_ai/
 │   ├── services.py         # Gemini AI integration
 │   ├── views.py            # API views
 │   ├── urls.py              # App-level routes
+│   ├── management/
+│   │   └── commands/
+│   │       └── delete_expired_data.py   # GDPR retention cleanup command
 │   └── migrations/
+├── cron/
+│   ├── entrypoint.sh        # Cron sidecar entrypoint
+│   └── statement-ai-cron    # Crontab: daily retention cleanup schedule
 ├── docker-compose.yml
 ├── Dockerfile
 └── requirements.txt

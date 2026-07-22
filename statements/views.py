@@ -1,12 +1,18 @@
 import logging
+from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.models import User
+from django.http import FileResponse, Http404
+from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .models import BankStatement, Transaction
 from .serializers import (
+    AccountDeleteSerializer,
     BankStatementSerializer,
     TransactionSerializer,
     UserRegistrationSerializer,
@@ -175,3 +181,102 @@ class StatementBulkDeleteView(generics.GenericAPIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class StatementFileDownloadView(APIView):
+    """
+    Serves the original uploaded PDF only to its owner. Media files must
+    never be exposed via a public webserver/static route in production;
+    this authenticated endpoint is the only supported way to retrieve them.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk, *args, **kwargs):
+
+        try:
+
+            statement = BankStatement.objects.get(pk=pk, user=request.user)
+
+        except BankStatement.DoesNotExist:
+
+            raise Http404
+
+        if not statement.file:
+
+            raise Http404
+
+        return FileResponse(
+            statement.file.open("rb"),
+            as_attachment=True,
+            filename=statement.file.name.split("/")[-1],
+            content_type="application/pdf",
+        )
+
+
+class AccountDeleteView(generics.GenericAPIView):
+    """
+    Permanently deletes the authenticated user's account, including all
+    bank statements, transactions and uploaded PDF files (GDPR Art. 17 -
+    right to erasure). Requires password confirmation.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = AccountDeleteSerializer
+
+    def delete(self, request, *args, **kwargs):
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if not request.user.check_password(serializer.validated_data["password"]):
+
+            return Response(
+                {"error": "Incorrect password."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+        for statement in BankStatement.objects.filter(user=user):
+
+            if statement.file:
+
+                statement.file.delete(save=False)
+
+        user.delete()  # cascades to statements/transactions
+
+        return Response(
+            {"message": "Your account and all associated data were permanently deleted."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class DataExportView(generics.GenericAPIView):
+    """
+    Returns all personal data stored about the authenticated user as JSON
+    (GDPR Art. 15 - right of access / Art. 20 - data portability). Original
+    PDF files can be retrieved individually via the file download endpoint.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+
+        user = request.user
+        statements = BankStatement.objects.filter(user=user).order_by("-id")
+
+        data = {
+            "user": {
+                "username": user.username,
+                "email": user.email,
+                "date_joined": user.date_joined,
+            },
+            "statements": [
+                {
+                    **BankStatementSerializer(statement).data,
+                    "file_download_url": f"/api/statements/{statement.id}/file/",
+                }
+                for statement in statements
+            ],
+        }
+        return Response(data, status=status.HTTP_200_OK)
