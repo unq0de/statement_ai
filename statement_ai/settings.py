@@ -71,16 +71,38 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'statement_ai.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_DB', 'statement_ai_db'),
-        'USER': os.environ.get('POSTGRES_USER', 'statement_ai_user'),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'statement_ai_password'),
-        'HOST': 'db',
-        'PORT': '5432',
+DB_BACKEND = os.environ.get('DB_BACKEND', 'local')  # 'local' oder 'supabase'
+
+if DB_BACKEND == 'supabase':
+    if not DEBUG:
+        _required = ['SUPABASE_DB_HOST', 'SUPABASE_DB_PASSWORD']
+        _missing = [v for v in _required if not os.environ.get(v)]
+        if _missing:
+            raise RuntimeError(f"Missing Supabase env vars: {', '.join(_missing)}")
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('SUPABASE_DB_NAME', 'postgres'),
+            'USER': os.environ.get('SUPABASE_DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('SUPABASE_DB_PASSWORD'),
+            'HOST': os.environ.get('SUPABASE_DB_HOST'),
+            'PORT': os.environ.get('SUPABASE_DB_PORT', '6543'),  # Supavisor Pooler
+            'OPTIONS': {'sslmode': 'require'},
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('POSTGRES_DB', 'statement_ai_db'),
+            'USER': os.environ.get('POSTGRES_USER', 'statement_ai_user'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'statement_ai_password'),
+            # Fällt auf 'db' zurück (Docker-Compose-Servicename), aber überschreibbar
+            # für Umgebungen ohne Compose-Netzwerk (z.B. Cloud Run + Cloud SQL/externe DB).
+            'HOST': os.environ.get('POSTGRES_HOST', 'db'),
+            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
