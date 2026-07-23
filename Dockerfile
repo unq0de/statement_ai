@@ -14,6 +14,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN chmod +x cron/entrypoint.sh
 
-EXPOSE 8000
+# Standard-Port für Cloud Run setzen
+ENV PORT=8080
+EXPOSE 8080
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Production-Start mit Gunicorn
+# WICHTIG: Ersetze 'DEIN_PROJEKTNAME' mit dem Namen deines Django-Projektordners (wo die wsgi.py liegt)
+CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 0 statement_ai.wsgi:application
