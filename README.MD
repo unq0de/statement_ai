@@ -250,21 +250,25 @@ SUPABASE_DB_SSLMODE=require
 
 You do **not** need to create tables manually in the Supabase SQL editor. The existing Django migrations create the exact same schema automatically — `BankStatement`, `Transaction`, plus Django's own `auth_user`, `django_session`, and so on.
 
+**Start the stack**
+
 ```bash
-docker compose up -d --build web cron
+docker compose up -d --build
 ```
 
-*Skips the now-unused local `db` service.*
+With `DB_ENGINE=supabase` set in `.env`, the local `db` service is skipped automatically — it only starts for `DB_ENGINE=local`, so there's no need to name `web`/`cron` explicitly anymore.
+
+**Run migrations**
 
 ```bash
 docker compose exec web python manage.py migrate
 ```
 
+**Create an admin user** *(optional, for `/admin`)*
+
 ```bash
 docker compose exec web python manage.py createsuperuser
 ```
-
-*Optional.*
 
 That's it — zero changes needed to `models.py`, `views.py`, or `serializers.py`.
 
@@ -359,8 +363,8 @@ Once the access token expires, use the [refresh endpoint](#5-refresh-token) to o
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/transactions/` | Yes | List your own transactions |
 
-<details>
 <a id="3-register-a-user"></a>
+<details>
 <summary><b>3. Register a User</b></summary>
 
 Creates a new user account.
@@ -404,8 +408,8 @@ Creates a new user account.
 
 </details>
 
-<details>
 <a id="4-login-obtain-token"></a>
+<details>
 <summary><b>4. Login (Obtain Token)</b></summary>
 
 Exchanges username + password for a token pair.
@@ -436,8 +440,8 @@ Exchanges username + password for a token pair.
 
 </details>
 
-<details>
 <a id="5-refresh-token"></a>
+<details>
 <summary><b>5. Refresh Token</b></summary>
 
 Issues a new access token from a valid refresh token.
@@ -466,8 +470,8 @@ Issues a new access token from a valid refresh token.
 
 </details>
 
-<details>
 <a id="6-upload-a-bank-statement"></a>
+<details>
 <summary><b>6. Upload a Bank Statement</b></summary>
 
 Uploads a PDF file, has it analyzed by Gemini AI, and automatically saves the detected transactions to the database. This request can take a few seconds depending on file size, since it waits synchronously for the AI response.
@@ -528,8 +532,8 @@ The individually detected transactions are **not** included directly in this res
 
 </details>
 
-<details>
 <a id="7-list-bank-statements"></a>
+<details>
 <summary><b>7. List Bank Statements</b></summary>
 
 Lists all bank statements of the logged-in user, newest first.
@@ -565,8 +569,8 @@ Lists all bank statements of the logged-in user, newest first.
 
 </details>
 
-<details>
 <a id="8-delete-a-bank-statement"></a>
+<details>
 <summary><b>8. Delete a Bank Statement</b></summary>
 
 Deletes a single bank statement, including its file and all associated transactions (cascade).
@@ -594,8 +598,8 @@ curl -X DELETE http://localhost:8000/api/statements/14/ \
 
 </details>
 
-<details>
 <a id="9-delete-all-bank-statements"></a>
+<details>
 <summary><b>9. Delete All Bank Statements</b></summary>
 
 Permanently deletes **all** bank statements and transactions of the logged-in user, including the physical PDF files.
@@ -614,8 +618,8 @@ Permanently deletes **all** bank statements and transactions of the logged-in us
 
 </details>
 
-<details>
 <a id="10-list-transactions"></a>
+<details>
 <summary><b>10. List Transactions</b></summary>
 
 Lists all transactions from all bank statements of the logged-in user, sorted by date (newest first).
@@ -651,8 +655,8 @@ Lists all transactions from all bank statements of the logged-in user, sorted by
 
 </details>
 
-<details>
 <a id="11-analytics-ai-evaluations"></a>
+<details>
 <summary><b>11. Analytics (AI Evaluations)</b></summary>
 
 Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statements that have already been successfully processed.
@@ -674,8 +678,8 @@ Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statement
 
 </details>
 
-<details>
 <a id="12-download-the-original-pdf"></a>
+<details>
 <summary><b>12. Download the Original PDF</b></summary>
 
 Streams the original uploaded PDF file of a bank statement. This is the only supported way to retrieve the file in production, since `/media/` is not publicly exposed there.
@@ -697,8 +701,8 @@ curl -OJ http://localhost:8000/api/statements/14/file/ \
 
 </details>
 
-<details>
 <a id="13-export-my-data"></a>
+<details>
 <summary><b>13. Export My Data</b></summary>
 
 Returns all personal data stored about the authenticated user — profile info plus every bank statement and its transactions — as a single JSON document (GDPR Art. 15 right of access / Art. 20 data portability). Original PDF files are referenced by download URL rather than embedded.
@@ -730,8 +734,8 @@ Returns all personal data stored about the authenticated user — profile info p
 
 </details>
 
-<details>
 <a id="14-delete-my-account"></a>
+<details>
 <summary><b>14. Delete My Account</b></summary>
 
 Permanently deletes the authenticated user's account, including all bank statements, transactions, and uploaded PDF files (GDPR Art. 17 right to erasure). Requires the current password as confirmation.
@@ -762,8 +766,8 @@ Permanently deletes the authenticated user's account, including all bank stateme
 
 </details>
 
-<details>
 <a id="15-data-models"></a>
+<details>
 <summary><b>15. Data Models</b></summary>
 
 **BankStatement**
@@ -795,8 +799,8 @@ Permanently deletes the authenticated user's account, including all bank stateme
 
 </details>
 
-<details>
 <a id="16-error-format"></a>
+<details>
 <summary><b>16. Error Format</b></summary>
 
 Errors are returned consistently as a JSON object with an `error` field (exception: registration validation errors, which are field-specific):
@@ -816,8 +820,8 @@ Errors are returned consistently as a JSON object with an `error` field (excepti
 
 </details>
 
-<details open>
 <a id="17-typical-flow-end-to-end-example"></a>
+<details open>
 <summary><b>17. Typical Flow (End-to-End Example)</b></summary>
 
 **1. Register**
@@ -919,24 +923,35 @@ curl -X DELETE http://localhost:8000/api/auth/account/ \
 
 ```
 statement_ai/
-├── statement_ai/          # Django project (settings, urls, wsgi)
-├── statements/             # Main app
-│   ├── models.py           # BankStatement & Transaction models
-│   ├── serializers.py      # DRF serializers
-│   ├── services.py         # Gemini AI integration
-│   ├── views.py            # API views
-│   ├── urls.py              # App-level routes
+├── statement_ai/                 # Django project
+│   ├── settings.py                # Settings, incl. local/Supabase DB switch & global exception handler
+│   ├── urls.py                    # Root URL config (includes statements/urls.py under /api/)
+│   └── wsgi.py                    # WSGI entrypoint
+├── statements/                   # Main app
+│   ├── models.py                  # BankStatement & Transaction models
+│   ├── serializers.py             # DRF serializers
+│   ├── services.py                # Gemini AI integration (extraction, categorization, evaluation)
+│   ├── views.py                   # API views
+│   ├── urls.py                    # App-level routes
+│   ├── exceptions.py              # Project-wide DRF exception handler (consistent JSON errors)
 │   ├── management/
 │   │   └── commands/
 │   │       └── delete_expired_data.py   # GDPR retention cleanup command
 │   └── migrations/
+│       ├── 0001_initial.py
+│       └── 0002_transaction_payee_payer_and_more.py
 ├── cron/
-│   ├── entrypoint.sh        # Cron sidecar entrypoint
-│   └── statement-ai-cron    # Crontab: daily retention cleanup schedule
-├── .env.example             # Template for required environment variables
+│   ├── entrypoint.sh              # Cron sidecar entrypoint
+│   └── statement-ai-cron          # Crontab: daily retention cleanup schedule
+├── .github/
+│   └── workflows/
+│       └── codacy.yml             # Codacy security scan CI workflow
+├── manage.py                     # Django management CLI
+├── .env.example                   # Template for required environment variables
+├── .gitignore
 ├── docker-compose.yml
 ├── Dockerfile
-├── LICENSE                  # MIT License
+├── LICENSE                        # MIT License
 └── requirements.txt
 ```
 
