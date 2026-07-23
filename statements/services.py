@@ -23,7 +23,9 @@ def process_pdf_statement_with_gemini(statement_instance):
 
     CRITICAL REQUIREMENTS:
     1. STRICT LANGUAGE REQUIREMENT: All output fields, summaries, descriptions, and evaluation text MUST BE IN ENGLISH ONLY. Do NOT use German or any other language under any circumstances.
-    2. RETURN ONLY VALID JSON. No Markdown formatting block wrappers (do NOT use ```json ... ```), just plain raw JSON.
+    2. CONTENT LENGHT: The AI evaluation must be comprehensive, covering all transactions, and should provide a clear summary of the user's financial situation based on the statement in three sentences at maximum.
+    3. SPEECH STYLE: In the whole evaluation use "you" for the user instead of the whole name and writing in third person is strictly forbidden. The evaluation should be written in a friendly and professional tone, as if you were a financial advisor giving advice to the user.
+    4. RETURN ONLY VALID JSON. No Markdown formatting block wrappers (do NOT use ```json ... ```), just plain raw JSON.
 
     ALLOWED CATEGORIES (Pick EXACTLY ONE per transaction):
     - Housing & Utilities
