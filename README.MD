@@ -187,6 +187,32 @@ The API is then available at `http://localhost:8000/api/`.
 
 > ⚠️ **Warning:** Never commit your `.env` file. Rotate `SECRET_KEY` and `GEMINI_API_KEY` immediately if they are ever exposed.
 
+### Scheduled Data Retention Cleanup
+
+Bank statements older than `DATA_RETENTION_DAYS` are cleaned up automatically by a dedicated `cron` service in `docker-compose.yml`. It runs the same image as `web`, but only executes `manage.py delete_expired_data` on a daily schedule (`cron/statement-ai-cron`, default `03:00`) and otherwise stays idle.
+
+It starts automatically with:
+
+```bash
+sudo docker compose up -d --build
+```
+
+Check that it's running and inspect its logs with:
+
+```bash
+sudo docker compose logs -f cron
+```
+
+You can also trigger a cleanup manually at any time — both the `web` and `cron` services share the same code and database:
+
+```bash
+sudo docker compose exec cron python manage.py delete_expired_data
+```
+
+This permanently deletes every bank statement (and its transactions and PDF file) whose `uploaded_at` is older than the configured retention period. To change the schedule, edit `cron/statement-ai-cron` and rebuild the `cron` service.
+
+> ℹ️ **Note:** If you'd rather not run the sidecar container, remove the `cron` service from `docker-compose.yml` and schedule `docker compose exec web python manage.py delete_expired_data` via the host's system cron instead.
+
 ---
 
 ## Using Supabase Instead of the Local Postgres Container
@@ -271,37 +297,6 @@ This project already has its own GDPR/retention logic (`delete_expired_data`), J
 
 > ✅ **Tip:** All variables in the table above — including `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and the `POSTGRES_*` credentials — are forwarded from `.env` into the `web`, `cron`, and `db` containers via `docker-compose.yml`. Changing a value in `.env` and rebuilding is enough; you don't need to edit `docker-compose.yml` by hand.
 
-<details>
-<summary><b>Scheduled Data Retention Cleanup</b> (click to expand)</summary>
-
-<br>
-
-Bank statements older than `DATA_RETENTION_DAYS` are cleaned up automatically by a dedicated `cron` service in `docker-compose.yml`. It runs the same image as `web`, but only executes `manage.py delete_expired_data` on a daily schedule (`cron/statement-ai-cron`, default `03:00`) and otherwise stays idle.
-
-It starts automatically with:
-
-```bash
-sudo docker compose up -d --build
-```
-
-Check that it's running and inspect its logs with:
-
-```bash
-sudo docker compose logs -f cron
-```
-
-You can also trigger a cleanup manually at any time — both the `web` and `cron` services share the same code and database:
-
-```bash
-sudo docker compose exec cron python manage.py delete_expired_data
-```
-
-This permanently deletes every bank statement (and its transactions and PDF file) whose `uploaded_at` is older than the configured retention period. To change the schedule, edit `cron/statement-ai-cron` and rebuild the `cron` service.
-
-> ℹ️ **Note:** If you'd rather not run the sidecar container, remove the `cron` service from `docker-compose.yml` and schedule `docker compose exec web python manage.py delete_expired_data` via the host's system cron instead.
-
-</details>
-
 ---
 
 ## Privacy & GDPR
@@ -351,21 +346,22 @@ Once the access token expires, use the [refresh endpoint](#5-refresh-token) to o
 
 | Method | Path | Auth Required | Description |
 |---|---|---|---|
-| 🟢 `POST` | `/api/auth/register/` | No | Register a new user |
-| 🟢 `POST` | `/api/auth/login/` | No | Obtain access & refresh tokens |
-| 🟢 `POST` | `/api/auth/refresh/` | No (refresh token required) | Obtain a new access token |
-| 🔴 `DELETE` | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
-| 🔵 `GET` | `/api/auth/export/` | Yes | Export all personal data as JSON |
-| 🔵 `GET` | `/api/statements/` | Yes | List your own bank statements |
-| 🟢 `POST` | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
-| 🔵 `GET` | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
-| 🔴 `DELETE` | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
-| 🔴 `DELETE` | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
-| 🔵 `GET` | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
-| 🔵 `GET` | `/api/transactions/` | Yes | List your own transactions |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/register/` | No | Register a new user |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/login/` | No | Obtain access & refresh tokens |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/refresh/` | No (refresh token required) | Obtain a new access token |
+| ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/auth/export/` | Yes | Export all personal data as JSON |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/` | Yes | List your own bank statements |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
+| ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
+| ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/transactions/` | Yes | List your own transactions |
 
 <details>
-<summary><h3>3. Register a User</h3></summary>
+<a id="3-register-a-user"></a>
+<summary><b>3. Register a User</b></summary>
 
 Creates a new user account.
 
@@ -409,7 +405,8 @@ Creates a new user account.
 </details>
 
 <details>
-<summary><h3>4. Login (Obtain Token)</h3></summary>
+<a id="4-login-obtain-token"></a>
+<summary><b>4. Login (Obtain Token)</b></summary>
 
 Exchanges username + password for a token pair.
 
@@ -440,7 +437,8 @@ Exchanges username + password for a token pair.
 </details>
 
 <details>
-<summary><h3>5. Refresh Token</h3></summary>
+<a id="5-refresh-token"></a>
+<summary><b>5. Refresh Token</b></summary>
 
 Issues a new access token from a valid refresh token.
 
@@ -469,7 +467,8 @@ Issues a new access token from a valid refresh token.
 </details>
 
 <details>
-<summary><h3>6. Upload a Bank Statement</h3></summary>
+<a id="6-upload-a-bank-statement"></a>
+<summary><b>6. Upload a Bank Statement</b></summary>
 
 Uploads a PDF file, has it analyzed by Gemini AI, and automatically saves the detected transactions to the database. This request can take a few seconds depending on file size, since it waits synchronously for the AI response.
 
@@ -530,7 +529,8 @@ The individually detected transactions are **not** included directly in this res
 </details>
 
 <details>
-<summary><h3>7. List Bank Statements</h3></summary>
+<a id="7-list-bank-statements"></a>
+<summary><b>7. List Bank Statements</b></summary>
 
 Lists all bank statements of the logged-in user, newest first.
 
@@ -566,7 +566,8 @@ Lists all bank statements of the logged-in user, newest first.
 </details>
 
 <details>
-<summary><h3>8. Delete a Bank Statement</h3></summary>
+<a id="8-delete-a-bank-statement"></a>
+<summary><b>8. Delete a Bank Statement</b></summary>
 
 Deletes a single bank statement, including its file and all associated transactions (cascade).
 
@@ -594,7 +595,8 @@ curl -X DELETE http://localhost:8000/api/statements/14/ \
 </details>
 
 <details>
-<summary><h3>9. Delete All Bank Statements</h3></summary>
+<a id="9-delete-all-bank-statements"></a>
+<summary><b>9. Delete All Bank Statements</b></summary>
 
 Permanently deletes **all** bank statements and transactions of the logged-in user, including the physical PDF files.
 
@@ -613,7 +615,8 @@ Permanently deletes **all** bank statements and transactions of the logged-in us
 </details>
 
 <details>
-<summary><h3>10. List Transactions</h3></summary>
+<a id="10-list-transactions"></a>
+<summary><b>10. List Transactions</b></summary>
 
 Lists all transactions from all bank statements of the logged-in user, sorted by date (newest first).
 
@@ -649,7 +652,8 @@ Lists all transactions from all bank statements of the logged-in user, sorted by
 </details>
 
 <details>
-<summary><h3>11. Analytics (AI Evaluations)</h3></summary>
+<a id="11-analytics-ai-evaluations"></a>
+<summary><b>11. Analytics (AI Evaluations)</b></summary>
 
 Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statements that have already been successfully processed.
 
@@ -671,7 +675,8 @@ Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statement
 </details>
 
 <details>
-<summary><h3>12. Download the Original PDF</h3></summary>
+<a id="12-download-the-original-pdf"></a>
+<summary><b>12. Download the Original PDF</b></summary>
 
 Streams the original uploaded PDF file of a bank statement. This is the only supported way to retrieve the file in production, since `/media/` is not publicly exposed there.
 
@@ -693,7 +698,8 @@ curl -OJ http://localhost:8000/api/statements/14/file/ \
 </details>
 
 <details>
-<summary><h3>13. Export My Data</h3></summary>
+<a id="13-export-my-data"></a>
+<summary><b>13. Export My Data</b></summary>
 
 Returns all personal data stored about the authenticated user — profile info plus every bank statement and its transactions — as a single JSON document (GDPR Art. 15 right of access / Art. 20 data portability). Original PDF files are referenced by download URL rather than embedded.
 
@@ -725,7 +731,8 @@ Returns all personal data stored about the authenticated user — profile info p
 </details>
 
 <details>
-<summary><h3>14. Delete My Account</h3></summary>
+<a id="14-delete-my-account"></a>
+<summary><b>14. Delete My Account</b></summary>
 
 Permanently deletes the authenticated user's account, including all bank statements, transactions, and uploaded PDF files (GDPR Art. 17 right to erasure). Requires the current password as confirmation.
 
@@ -756,7 +763,8 @@ Permanently deletes the authenticated user's account, including all bank stateme
 </details>
 
 <details>
-<summary><h3>15. Data Models</h3></summary>
+<a id="15-data-models"></a>
+<summary><b>15. Data Models</b></summary>
 
 **BankStatement**
 
@@ -788,7 +796,8 @@ Permanently deletes the authenticated user's account, including all bank stateme
 </details>
 
 <details>
-<summary><h3>16. Error Format</h3></summary>
+<a id="16-error-format"></a>
+<summary><b>16. Error Format</b></summary>
 
 Errors are returned consistently as a JSON object with an `error` field (exception: registration validation errors, which are field-specific):
 
@@ -808,7 +817,8 @@ Errors are returned consistently as a JSON object with an `error` field (excepti
 </details>
 
 <details open>
-<summary><h3>17. Typical Flow (End-to-End Example)</h3></summary>
+<a id="17-typical-flow-end-to-end-example"></a>
+<summary><b>17. Typical Flow (End-to-End Example)</b></summary>
 
 **1. Register**
 
