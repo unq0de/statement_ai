@@ -175,6 +175,12 @@ The API is then available at `http://localhost:8000/api/`.
 | `POSTGRES_DB` | Database name (only used if `DB_ENGINE=local`) | `statement_ai_db` |
 | `POSTGRES_USER` | Database user (only used if `DB_ENGINE=local`) | `statement_ai_user` |
 | `POSTGRES_PASSWORD` | Database password (only used if `DB_ENGINE=local`) | `********` |
+| `SUPABASE_DB_HOST` | Supabase Postgres host (only used if `DB_ENGINE=supabase`) — direct or pooler host, see [Using Supabase](#using-supabase-instead-of-the-local-postgres-container) | `db.xxxxxxxxxxxx.supabase.co` |
+| `SUPABASE_DB_PORT` | Supabase Postgres port (only used if `DB_ENGINE=supabase`) — `5432` direct, `6543` if using the pooler | `5432` |
+| `SUPABASE_DB_NAME` | Supabase database name (only used if `DB_ENGINE=supabase`) | `postgres` |
+| `SUPABASE_DB_USER` | Supabase database user (only used if `DB_ENGINE=supabase`) | `postgres` |
+| `SUPABASE_DB_PASSWORD` | Supabase database password (only used if `DB_ENGINE=supabase`) | `********` |
+| `SUPABASE_DB_SSLMODE` | SSL mode for the Supabase connection (only used if `DB_ENGINE=supabase`); Supabase requires TLS | `require` |
 | `ALLOWED_HOSTS` | Comma-separated hosts (production only) | `api.example.com` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated origins (production only) | `https://app.example.com` |
 | `DATA_RETENTION_DAYS` | Days a bank statement is kept before it becomes eligible for automatic deletion | `365` |
@@ -309,6 +315,8 @@ Statement AI processes financial data extracted from bank statements, which is p
 | 📤 **Right of access / portability** | [`GET /api/auth/export/`](#13-export-my-data) returns all personal data as JSON |
 | 🔒 **Access control** | PDFs are never publicly reachable, only via the [authenticated download endpoint](#12-download-the-original-pdf) |
 | 🌍 **Third-country data transfer** | Statement content is sent to **Google Gemini** (Google LLC, USA) for AI processing |
+
+> 🤖 **Note on Gemini data usage:** This project uses a `GEMINI_API_KEY` from the Gemini API's **paid quota** (i.e. a Cloud project with an active billing account). According to Google's own terms, on Paid Services Google does **not** use your prompts or the PDF/statement content you submit, nor the generated responses, to improve its products or train models; prompts and responses are only logged for a limited time solely to detect and prevent violations of Google's Prohibited Use Policy and for required legal/regulatory disclosures. This is a different (and stricter) data handling regime than the **free/unpaid** Gemini tier, where submitted content and responses *may* be used by Google to improve its products and may be reviewed by humans. If you run this project on the free tier, treat it as unsuitable for real users' financial data. See Google's official **[Gemini API Additional Terms of Service](https://ai.google.dev/gemini-api/terms)**, sections "Paid Services → How Google Uses Your Data" and "Unpaid Services → How Google Uses Your Data", for the authoritative wording.
 
 > ⚖️ **Disclaimer:** This section describes the technical measures available in the API — **not legal advice**. Consult a data protection professional before processing real users' financial data in production. If you operate this API for real users in the EU/EEA, you are responsible for having a valid legal basis and a Data Processing Agreement (DPA) with Google covering this transfer.
 
@@ -456,7 +464,7 @@ Issues a new access token from a valid refresh token.
 
 **Error Cases**
 
-- `401 Unauthorized` – Refresh token expired or invalid → user must log in again.
+- `401 Unauthorized` – Refresh token expired or invalid, or the user it refers to no longer exists (e.g. account deleted, database reset) → user must log in again.
 
 </details>
 
@@ -493,7 +501,7 @@ curl -X POST http://localhost:8000/api/statements/upload/ \
 {
   "message": "Bank statement processed successfully.",
   "statement_id": 14,
-  "ai_evaluation": "This statement shows a healthy balance between income and recurring expenses. The primary income source is a monthly salary deposit of $3,200.00. Notable spending categories include Housing & Utilities and Groceries & Food..."
+  "ai_evaluation": "Your finances look healthy this month, with your salary of $3,200.00 comfortably covering your regular expenses. Most of your spending went toward Housing & Utilities and Groceries & Food. Keep an eye on your subscriptions, as they're adding up steadily each month."
 }
 ```
 
@@ -537,7 +545,7 @@ Lists all bank statements of the logged-in user, newest first.
     "file": "/media/statements/2026/07/statement_july.pdf",
     "uploaded_at": "2026-07-22T18:32:10Z",
     "is_processed": true,
-    "ai_evaluation": "This statement shows a healthy balance...",
+    "ai_evaluation": "Your finances look healthy this month, with your salary comfortably covering your regular expenses...",
     "transactions": [
       {
         "id": 101,
@@ -652,8 +660,8 @@ Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statement
 ```json
 {
   "evaluations": [
-    { "id": 14, "evaluation": "This statement shows a healthy balance..." },
-    { "id": 12, "evaluation": "Spending was notably higher this month due to..." }
+    { "id": 14, "evaluation": "Your finances look healthy this month, with your salary comfortably covering your regular expenses..." },
+    { "id": 12, "evaluation": "Your spending was notably higher this month, mainly due to..." }
   ]
 }
 ```
@@ -706,7 +714,7 @@ Returns all personal data stored about the authenticated user — profile info p
       "file": "/media/statements/2026/07/statement_july.pdf",
       "uploaded_at": "2026-07-22T18:32:10Z",
       "is_processed": true,
-      "ai_evaluation": "This statement shows a healthy balance...",
+      "ai_evaluation": "Your finances look healthy this month, with your salary comfortably covering your regular expenses...",
       "transactions": [ ],
       "file_download_url": "/api/statements/14/file/"
     }
@@ -758,7 +766,7 @@ Permanently deletes the authenticated user's account, including all bank stateme
 | `file` | string (URL) | Path/URL to the stored PDF file (use the [download endpoint](#12-download-the-original-pdf) in production) |
 | `uploaded_at` | datetime (ISO 8601, UTC) | Upload timestamp; also the basis for the retention cleanup |
 | `is_processed` | boolean | `true` once AI processing has completed successfully |
-| `ai_evaluation` | string \| null | Free-text summary from the AI (always in English) |
+| `ai_evaluation` | string \| null | Free-text summary from the AI (always in English, max. 3 sentences, written directly to "you" in a friendly, professional financial-advisor tone) |
 | `transactions` | Transaction[] | Associated transactions (only included in the list view) |
 
 **Transaction**
@@ -794,6 +802,8 @@ Errors are returned consistently as a JSON object with an `error` field (excepti
 | `401 Unauthorized` | Missing, invalid, or expired token |
 | `404 Not Found` | Resource does not exist or belongs to another user |
 | `500 Internal Server Error` | Unexpected server error (e.g. AI processing failed) |
+
+> ℹ️ **Note:** A project-wide DRF exception handler guarantees this `{"error": "..."}` format even for cases DRF wouldn't normally catch cleanly — for example, a cryptographically valid refresh/access token whose underlying user no longer exists (deleted account, reset database, switched `DB_ENGINE`) is returned as a clean `401 Unauthorized` with `{"error": "Invalid or expired token."}` instead of an opaque `500`. All other unexpected exceptions are still logged server-side with a full traceback, but only ever exposed to the client as a generic `500` message.
 
 </details>
 
