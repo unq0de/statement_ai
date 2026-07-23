@@ -23,6 +23,7 @@
 </p>
 
 <p>
+  <a href="#-quickstart">Quickstart</a> ·
   <a href="#-features">Features</a> ·
   <a href="#-tech-stack">Tech Stack</a> ·
   <a href="#-getting-started">Getting Started</a> ·
@@ -36,6 +37,23 @@
 <br>
 
 > Statement AI reads uploaded bank statements (PDF), has Google Gemini detect, categorize, and summarize every single transaction — and serves it all through a clean, JWT-secured REST API with full per-user data isolation.
+
+---
+
+## ⚡ Quickstart
+
+Requires **Docker & Docker Compose** and a [Google Gemini API key](https://aistudio.google.com/apikey).
+
+```bash
+git clone https://github.com/<your-username>/statement-ai.git
+cd statement-ai
+cp .env.example .env                 # fill in SECRET_KEY and GEMINI_API_KEY at minimum
+docker compose up -d --build         # starts web, cron, and local Postgres
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py createsuperuser   # optional, for /admin
+```
+
+The API is now running at `http://localhost:8000/api/`. That's it — see [Getting Started](#-getting-started) below for details, or [Using Supabase](#-using-supabase-instead-of-the-local-postgres-container) if you'd rather use a hosted database instead of the local Postgres container.
 
 ---
 
@@ -110,14 +128,82 @@ The API is then available at `http://localhost:8000/api/`.
 | `SECRET_KEY` | Django secret key | `django-insecure-...` |
 | `DEBUG` | `1` for development, `0` for production | `0` |
 | `GEMINI_API_KEY` | Your Google Gemini API key | `AI...` |
-| `POSTGRES_DB` | Database name | `statement_ai_db` |
-| `POSTGRES_USER` | Database user | `statement_ai_user` |
-| `POSTGRES_PASSWORD` | Database password | `********` |
+| `DB_ENGINE` | `local` (default, docker Postgres) or `supabase` | `supabase` |
+| `POSTGRES_DB` | Database name (only used if `DB_ENGINE=local`) | `statement_ai_db` |
+| `POSTGRES_USER` | Database user (only used if `DB_ENGINE=local`) | `statement_ai_user` |
+| `POSTGRES_PASSWORD` | Database password (only used if `DB_ENGINE=local`) | `********` |
 | `ALLOWED_HOSTS` | Comma-separated hosts (production only) | `api.example.com` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated origins (production only) | `https://app.example.com` |
 | `DATA_RETENTION_DAYS` | Days a bank statement is kept before it becomes eligible for automatic deletion | `365` |
 
 > ⚠️ **Important:** Never commit your `.env` file. Rotate `SECRET_KEY` and `GEMINI_API_KEY` immediately if they are ever exposed.
+
+---
+
+## 🗄️ Using Supabase instead of the local Postgres container
+
+Supabase is a hosted **PostgreSQL** database. Because this project already talks to Postgres via Django's `psycopg2` backend, pointing it at Supabase is just a matter of changing connection settings — no code changes, no different driver, no REST API involved.
+
+### 1. Create the Supabase project (manual, one-time)
+
+1. Go to [supabase.com](https://supabase.com) → **New project** → pick a name, region, and a database password.
+2. Go to **Project Settings → Database → Connection parameters**. Note `Host`, `Port`, `Database name` (`postgres` by default), `User`, and your password.
+   - Use the **Session pooler** or **Transaction pooler** host for most deployments (works better with container restarts / multiple workers). The **direct connection** host also works for a single always-on container like this one.
+
+> The Supabase **project** must be created manually in the dashboard — there's no "create project" API call to run from app code. Everything *inside* it (tables, columns, indexes) is created automatically — see step 3.
+
+### 2. Configure environment variables
+
+In your `.env`:
+
+```bash
+DB_ENGINE=supabase
+SUPABASE_DB_HOST=db.xxxxxxxxxxxx.supabase.co   # or the pooler host
+SUPABASE_DB_PORT=5432                          # 6543 if using the pooler
+SUPABASE_DB_NAME=postgres
+SUPABASE_DB_USER=postgres
+SUPABASE_DB_PASSWORD=your-db-password
+SUPABASE_DB_SSLMODE=require
+```
+
+### 3. Create the schema
+
+You do **not** create tables manually in the Supabase SQL editor. The existing Django migrations (`statements/migrations/0001_initial.py`, `0002_...`) create the exact same schema (`BankStatement`, `Transaction`, plus Django's own `auth_user`, `django_session`, etc.) automatically:
+
+```bash
+docker compose up -d --build web cron   # skips the now-unused local "db" service
+docker compose exec web python manage.py migrate
+docker compose exec web python manage.py createsuperuser   # optional
+```
+
+That's it — zero changes needed to `models.py`, `views.py`, or `serializers.py`.
+
+### How access works (no REST API needed for the DB)
+
+- Django connects to Supabase's Postgres **directly over the Postgres wire protocol** via `psycopg2` (already in `requirements.txt`) — same as it talks to the local container today. This is the correct way to use Supabase from a Django backend.
+- Supabase's REST/GraphQL API (PostgREST) and the `supabase-py` SDK are a *different, optional* layer meant for client-side apps without their own backend. Since Django already **is** the backend and owns the schema via migrations, you don't need either for database access.
+- `supabase-py` would only become relevant if you later wanted other Supabase services from this backend, e.g. Supabase Storage for the PDF files.
+
+### Is Supabase worth it here, or better to self-host on GCP/AWS?
+
+Both connect the same way (plain Postgres), so this is an ops/hosting tradeoff, not a code one:
+
+| | **Supabase** | **Self-hosted Postgres (Cloud SQL / RDS)** |
+|---|---|---|
+| Setup effort | Minutes, via dashboard | You provision + manage the instance yourself |
+| Ops burden | Backups, patching, scaling handled for you | You own backups, patching, HA, monitoring |
+| Cost at small scale | Generous free tier | Smallest Cloud SQL/RDS tiers often cost more for the same workload |
+| Data residency | Limited region choice, EU regions available | Full control — matters for strict GDPR residency needs |
+| Vendor lock-in | Low — vanilla Postgres, portable via `pg_dump`/`pg_restore` | None, but you own the ops |
+| Extra features | Auth, Storage, Realtime available if needed later | None built-in |
+
+Given this project already has its own GDPR/retention logic (`delete_expired_data`), JWT auth, and per-user isolation, and doesn't need Supabase's Auth/Storage/Realtime:
+
+- **Supabase** is the better fit if you want a managed Postgres fast with minimal ops, and might use Supabase Storage for PDFs later.
+- **Cloud SQL / RDS** is the better fit if the API itself will run in GCP/AWS anyway (Cloud Run, ECS, etc.) — one cloud account, one network boundary, one bill, tighter region/VPC control.
+- Either is **strictly better than the local Docker Postgres** for anything beyond local dev, since that container's data lives only in an unmanaged Docker volume.
+
+Concrete suggestion: if you're not already committed to GCP/AWS for the rest of the stack, start with Supabase for the fastest path to a properly managed, backed-up Postgres. Since it's plain Postgres underneath, migrating later to Cloud SQL/RDS is a standard `pg_dump`/`pg_restore`, no Django code changes required.
 
 > ✅ All variables in the table above — including `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and the `POSTGRES_*` credentials — are now forwarded from `.env` into the `web`, `cron`, and `db` containers via `docker-compose.yml`. Changing a value in `.env` and running `sudo docker compose up -d --build` is sufficient; you no longer need to edit `docker-compose.yml` by hand.
 
