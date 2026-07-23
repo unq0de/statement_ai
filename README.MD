@@ -1,6 +1,6 @@
 <div align="center">
 
-# 💸 Statement AI
+# Statement AI
 
 ### AI-powered REST API that reads bank statement PDFs, categorizes every transaction, and generates financial summaries
 
@@ -23,41 +23,67 @@
 </p>
 
 <p>
-  <a href="#-quickstart">Quickstart</a> ·
-  <a href="#-features">Features</a> ·
-  <a href="#-tech-stack">Tech Stack</a> ·
-  <a href="#-getting-started">Getting Started</a> ·
-  <a href="#-privacy--gdpr">Privacy &amp; GDPR</a> ·
-  <a href="#-api-reference">API Reference</a> ·
-  <a href="#-project-structure">Structure</a>
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#tech-stack">Tech Stack</a> ·
+  <a href="#getting-started">Getting Started</a> ·
+  <a href="#privacy--gdpr">Privacy &amp; GDPR</a> ·
+  <a href="#api-reference">API Reference</a> ·
+  <a href="#project-structure">Structure</a>
 </p>
 
 </div>
 
 <br>
 
-> Statement AI reads uploaded bank statements (PDF), has Google Gemini detect, categorize, and summarize every single transaction — and serves it all through a clean, JWT-secured REST API with full per-user data isolation.
+> Statement AI reads uploaded bank statements (PDF), has Google Gemini detect, categorize, and summarize every transaction — and serves it all through a clean, JWT-secured REST API with full per-user data isolation.
 
 ---
 
-## ⚡ Quickstart
+## Quickstart
 
 Requires **Docker & Docker Compose** and a [Google Gemini API key](https://aistudio.google.com/apikey).
+
+**1. Clone the repo**
 
 ```bash
 git clone https://github.com/<your-username>/statement-ai.git
 cd statement-ai
-cp .env.example .env                 # fill in SECRET_KEY and GEMINI_API_KEY at minimum
-docker compose up -d --build         # starts web, cron, and local Postgres
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py createsuperuser   # optional, for /admin
 ```
 
-The API is now running at `http://localhost:8000/api/`. That's it — see [Getting Started](#-getting-started) below for details, or [Using Supabase](#-using-supabase-instead-of-the-local-postgres-container) if you'd rather use a hosted database instead of the local Postgres container.
+**2. Create your environment file**
+
+```bash
+cp .env.example .env
+```
+
+Fill in `SECRET_KEY` and `GEMINI_API_KEY` at minimum.
+
+**3. Start the stack**
+
+```bash
+docker compose up -d --build
+```
+
+This starts the `web`, `cron`, and local Postgres services.
+
+**4. Run migrations**
+
+```bash
+docker compose exec web python manage.py migrate
+```
+
+**5. Create an admin user** *(optional, for `/admin`)*
+
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
+The API is now running at `http://localhost:8000/api/`. See [Getting Started](#getting-started) below for details, or [Using Supabase](#using-supabase-instead-of-the-local-postgres-container) if you'd rather use a hosted database instead of the local Postgres container.
 
 ---
 
-## ✨ Features
+## Features
 
 <table>
 <tr>
@@ -90,7 +116,7 @@ The API is now running at `http://localhost:8000/api/`. That's it — see [Getti
 
 ---
 
-## 🧱 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -102,7 +128,7 @@ The API is now running at `http://localhost:8000/api/`. That's it — see [Getti
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -111,11 +137,28 @@ The API is now running at `http://localhost:8000/api/`. That's it — see [Getti
 
 ### Installation
 
+**1. Clone and configure**
+
 ```bash
 git clone https://github.com/<your-username>/statement-ai.git
 cd statement-ai
-cp .env.example .env   # then fill in your own values
+```
+
+```bash
+cp .env.example .env
+```
+
+Then fill in your own values in `.env`.
+
+**2. Build and start the containers**
+
+```bash
 sudo docker compose up -d --build
+```
+
+**3. Run database migrations**
+
+```bash
 sudo docker compose exec web python manage.py migrate
 ```
 
@@ -136,25 +179,30 @@ The API is then available at `http://localhost:8000/api/`.
 | `CORS_ALLOWED_ORIGINS` | Comma-separated origins (production only) | `https://app.example.com` |
 | `DATA_RETENTION_DAYS` | Days a bank statement is kept before it becomes eligible for automatic deletion | `365` |
 
-> ⚠️ **Important:** Never commit your `.env` file. Rotate `SECRET_KEY` and `GEMINI_API_KEY` immediately if they are ever exposed.
+> ⚠️ **Warning:** Never commit your `.env` file. Rotate `SECRET_KEY` and `GEMINI_API_KEY` immediately if they are ever exposed.
 
 ---
 
-## 🗄️ Using Supabase instead of the local Postgres container
+## Using Supabase Instead of the Local Postgres Container
 
-Supabase is a hosted **PostgreSQL** database. Because this project already talks to Postgres via Django's `psycopg2` backend, pointing it at Supabase is just a matter of changing connection settings — no code changes, no different driver, no REST API involved.
+Supabase is a hosted **PostgreSQL** database. This project already talks to Postgres via Django's `psycopg2` backend, so pointing it at Supabase is just a matter of changing connection settings:
 
-### 1. Create the Supabase project (manual, one-time)
+- No code changes
+- No different driver
+- No REST API involved
+
+### 1. Create the Supabase Project *(manual, one-time)*
 
 1. Go to [supabase.com](https://supabase.com) → **New project** → pick a name, region, and a database password.
-2. Go to **Project Settings → Database → Connection parameters**. Note `Host`, `Port`, `Database name` (`postgres` by default), `User`, and your password.
-   - Use the **Session pooler** or **Transaction pooler** host for most deployments (works better with container restarts / multiple workers). The **direct connection** host also works for a single always-on container like this one.
+2. Go to **Project Settings → Database → Connection parameters** and note the `Host`, `Port`, `Database name` (`postgres` by default), `User`, and your password.
+   - Use the **Session pooler** or **Transaction pooler** host for most deployments — it works better with container restarts and multiple workers.
+   - The **direct connection** host also works for a single always-on container like this one.
 
-> The Supabase **project** must be created manually in the dashboard — there's no "create project" API call to run from app code. Everything *inside* it (tables, columns, indexes) is created automatically — see step 3.
+> ℹ️ **Note:** The Supabase **project** must be created manually in the dashboard — there's no "create project" API call to run from app code. Everything *inside* it (tables, columns, indexes) is created automatically in step 3.
 
-### 2. Configure environment variables
+### 2. Configure Environment Variables
 
-In your `.env`:
+Add the following to your `.env`:
 
 ```bash
 DB_ENGINE=supabase
@@ -166,53 +214,65 @@ SUPABASE_DB_PASSWORD=your-db-password
 SUPABASE_DB_SSLMODE=require
 ```
 
-### 3. Create the schema
+### 3. Create the Schema
 
-You do **not** create tables manually in the Supabase SQL editor. The existing Django migrations (`statements/migrations/0001_initial.py`, `0002_...`) create the exact same schema (`BankStatement`, `Transaction`, plus Django's own `auth_user`, `django_session`, etc.) automatically:
+You do **not** need to create tables manually in the Supabase SQL editor. The existing Django migrations create the exact same schema automatically — `BankStatement`, `Transaction`, plus Django's own `auth_user`, `django_session`, and so on.
 
 ```bash
-docker compose up -d --build web cron   # skips the now-unused local "db" service
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py createsuperuser   # optional
+docker compose up -d --build web cron
 ```
+
+*Skips the now-unused local `db` service.*
+
+```bash
+docker compose exec web python manage.py migrate
+```
+
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
+*Optional.*
 
 That's it — zero changes needed to `models.py`, `views.py`, or `serializers.py`.
 
-### How access works (no REST API needed for the DB)
+### How Access Works *(no REST API needed for the database)*
 
-- Django connects to Supabase's Postgres **directly over the Postgres wire protocol** via `psycopg2` (already in `requirements.txt`) — same as it talks to the local container today. This is the correct way to use Supabase from a Django backend.
-- Supabase's REST/GraphQL API (PostgREST) and the `supabase-py` SDK are a *different, optional* layer meant for client-side apps without their own backend. Since Django already **is** the backend and owns the schema via migrations, you don't need either for database access.
-- `supabase-py` would only become relevant if you later wanted other Supabase services from this backend, e.g. Supabase Storage for the PDF files.
+- Django connects to Supabase's Postgres **directly over the Postgres wire protocol** via `psycopg2` (already in `requirements.txt`) — the same way it talks to the local container today. This is the correct way to use Supabase from a Django backend.
+- Supabase's REST/GraphQL API (PostgREST) and the `supabase-py` SDK are a *different, optional* layer meant for client-side apps without their own backend. Since Django already **is** the backend and owns the schema via migrations, neither is needed for database access.
+- `supabase-py` only becomes relevant if you later want other Supabase services from this backend — for example, Supabase Storage for the PDF files.
 
-### Is Supabase worth it here, or better to self-host on GCP/AWS?
+### Is Supabase Worth It Here, or Better to Self-Host on GCP/AWS?
 
 Both connect the same way (plain Postgres), so this is an ops/hosting tradeoff, not a code one:
 
-| | **Supabase** | **Self-hosted Postgres (Cloud SQL / RDS)** |
+| | **Supabase** | **Self-Hosted Postgres (Cloud SQL / RDS)** |
 |---|---|---|
-| Setup effort | Minutes, via dashboard | You provision + manage the instance yourself |
+| Setup effort | Minutes, via dashboard | You provision and manage the instance yourself |
 | Ops burden | Backups, patching, scaling handled for you | You own backups, patching, HA, monitoring |
 | Cost at small scale | Generous free tier | Smallest Cloud SQL/RDS tiers often cost more for the same workload |
 | Data residency | Limited region choice, EU regions available | Full control — matters for strict GDPR residency needs |
 | Vendor lock-in | Low — vanilla Postgres, portable via `pg_dump`/`pg_restore` | None, but you own the ops |
 | Extra features | Auth, Storage, Realtime available if needed later | None built-in |
 
-Given this project already has its own GDPR/retention logic (`delete_expired_data`), JWT auth, and per-user isolation, and doesn't need Supabase's Auth/Storage/Realtime:
+This project already has its own GDPR/retention logic (`delete_expired_data`), JWT auth, and per-user isolation, and doesn't need Supabase's Auth/Storage/Realtime:
 
 - **Supabase** is the better fit if you want a managed Postgres fast with minimal ops, and might use Supabase Storage for PDFs later.
 - **Cloud SQL / RDS** is the better fit if the API itself will run in GCP/AWS anyway (Cloud Run, ECS, etc.) — one cloud account, one network boundary, one bill, tighter region/VPC control.
 - Either is **strictly better than the local Docker Postgres** for anything beyond local dev, since that container's data lives only in an unmanaged Docker volume.
 
-Concrete suggestion: if you're not already committed to GCP/AWS for the rest of the stack, start with Supabase for the fastest path to a properly managed, backed-up Postgres. Since it's plain Postgres underneath, migrating later to Cloud SQL/RDS is a standard `pg_dump`/`pg_restore`, no Django code changes required.
+> 💡 **Suggestion:** If you're not already committed to GCP/AWS for the rest of the stack, start with Supabase for the fastest path to a properly managed, backed-up Postgres. Since it's plain Postgres underneath, migrating later to Cloud SQL/RDS is a standard `pg_dump`/`pg_restore` — no Django code changes required.
 
-> ✅ All variables in the table above — including `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and the `POSTGRES_*` credentials — are now forwarded from `.env` into the `web`, `cron`, and `db` containers via `docker-compose.yml`. Changing a value in `.env` and running `sudo docker compose up -d --build` is sufficient; you no longer need to edit `docker-compose.yml` by hand.
+> ✅ **Tip:** All variables in the table above — including `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and the `POSTGRES_*` credentials — are forwarded from `.env` into the `web`, `cron`, and `db` containers via `docker-compose.yml`. Changing a value in `.env` and rebuilding is enough; you don't need to edit `docker-compose.yml` by hand.
 
 <details>
-<summary><b>⏱️ Scheduled Data Retention Cleanup</b> (click to expand)</summary>
+<summary><b>Scheduled Data Retention Cleanup</b> (click to expand)</summary>
 
 <br>
 
-Bank statements older than `DATA_RETENTION_DAYS` are cleaned up automatically by a dedicated `cron` service in `docker-compose.yml`. It runs the same image as `web`, but only executes `manage.py delete_expired_data` on a daily schedule (`cron/statement-ai-cron`, default `03:00`) and otherwise stays idle. It starts automatically with:
+Bank statements older than `DATA_RETENTION_DAYS` are cleaned up automatically by a dedicated `cron` service in `docker-compose.yml`. It runs the same image as `web`, but only executes `manage.py delete_expired_data` on a daily schedule (`cron/statement-ai-cron`, default `03:00`) and otherwise stays idle.
+
+It starts automatically with:
 
 ```bash
 sudo docker compose up -d --build
@@ -224,21 +284,21 @@ Check that it's running and inspect its logs with:
 sudo docker compose logs -f cron
 ```
 
-To change the schedule, edit `cron/statement-ai-cron` and rebuild the `cron` service. You can also trigger a cleanup manually at any time — either via the `web` or the `cron` service, both share the same code and database:
+You can also trigger a cleanup manually at any time — both the `web` and `cron` services share the same code and database:
 
 ```bash
 sudo docker compose exec cron python manage.py delete_expired_data
 ```
 
-This permanently deletes every bank statement (and its transactions and PDF file) whose `uploaded_at` is older than the configured retention period.
+This permanently deletes every bank statement (and its transactions and PDF file) whose `uploaded_at` is older than the configured retention period. To change the schedule, edit `cron/statement-ai-cron` and rebuild the `cron` service.
 
-> If you'd rather not run the sidecar container, remove the `cron` service from `docker-compose.yml` and schedule `docker compose exec web python manage.py delete_expired_data` via the host's system cron instead.
+> ℹ️ **Note:** If you'd rather not run the sidecar container, remove the `cron` service from `docker-compose.yml` and schedule `docker compose exec web python manage.py delete_expired_data` via the host's system cron instead.
 
 </details>
 
 ---
 
-## 🔐 Privacy & GDPR
+## Privacy & GDPR
 
 Statement AI processes financial data extracted from bank statements, which is personal data under the GDPR. The following measures are implemented:
 
@@ -250,11 +310,11 @@ Statement AI processes financial data extracted from bank statements, which is p
 | 🔒 **Access control** | PDFs are never publicly reachable, only via the [authenticated download endpoint](#12-download-the-original-pdf) |
 | 🌍 **Third-country data transfer** | Statement content is sent to **Google Gemini** (Google LLC, USA) for AI processing |
 
-> ⚖️ This section describes the technical measures available in the API — **not legal advice**. Consult a data protection professional before processing real users' financial data in production. If you operate this API for real users in the EU/EEA, you are responsible for having a valid legal basis and a Data Processing Agreement (DPA) with Google covering this transfer.
+> ⚖️ **Disclaimer:** This section describes the technical measures available in the API — **not legal advice**. Consult a data protection professional before processing real users' financial data in production. If you operate this API for real users in the EU/EEA, you are responsible for having a valid legal basis and a Data Processing Agreement (DPA) with Google covering this transfer.
 
 ---
 
-## 📚 API Reference
+## API Reference
 
 <div align="center">
 
@@ -277,9 +337,7 @@ Authorization: Bearer <access_token>
 | Access Token | 60 minutes |
 | Refresh Token | 1 day |
 
-Once the access token expires, use the [refresh endpoint](#5-refresh-token) to obtain a new one without logging in again.
-
-All endpoints except registration and login require a valid access token. Without a (valid) token, the API responds with `401 Unauthorized`.
+Once the access token expires, use the [refresh endpoint](#5-refresh-token) to obtain a new one without logging in again. All endpoints except registration and login require a valid access token — without one, the API responds with `401 Unauthorized`.
 
 ### 2. Endpoints Overview
 
@@ -452,9 +510,11 @@ The individually detected transactions are **not** included directly in this res
 ```json
 { "error": "No file uploaded (field 'file' is required)." }
 ```
+
 ```json
 { "error": "Only PDF files are allowed." }
 ```
+
 ```json
 { "error": "File too large (max. 10 MB)." }
 ```
@@ -715,7 +775,7 @@ Permanently deletes the authenticated user's account, including all bank stateme
 
 > All AI-generated text (`description`, `ai_evaluation`) is always in **English**, regardless of the language of the original PDF.
 
-> ℹ️ Note: `transaction_type` is a real database-level enum (Django `choices`). `category`, however, is a free-text field at the database level (default `"Uncategorized"`) — the 15 categories above are enforced only by the instructions given to Gemini in the AI prompt, not by a DB constraint.
+> ℹ️ **Note:** `transaction_type` is a real database-level enum (Django `choices`). `category`, however, is a free-text field at the database level (default `"Uncategorized"`) — the 15 categories above are enforced only by the instructions given to Gemini in the AI prompt, not by a DB constraint.
 
 </details>
 
@@ -740,57 +800,91 @@ Errors are returned consistently as a JSON object with an `error` field (excepti
 <details open>
 <summary><h3>17. Typical Flow (End-to-End Example)</h3></summary>
 
+**1. Register**
+
 ```bash
-# 1. Register
 curl -X POST http://localhost:8000/api/auth/register/ \
   -H "Content-Type: application/json" \
   -d '{"username": "max", "email": "max@example.com", "password": "ASecurePassword123!"}'
+```
 
-# 2. Log in and obtain tokens
+**2. Log in and obtain tokens**
+
+```bash
 curl -X POST http://localhost:8000/api/auth/login/ \
   -H "Content-Type: application/json" \
   -d '{"username": "max", "password": "ASecurePassword123!"}'
 # -> { "access": "...", "refresh": "..." }
+```
 
-# 3. Upload a bank statement
+**3. Upload a bank statement**
+
+```bash
 curl -X POST http://localhost:8000/api/statements/upload/ \
   -H "Authorization: Bearer <access_token>" \
   -F "file=@statement_july.pdf"
+```
 
-# 4. View all bank statements
+**4. View all bank statements**
+
+```bash
 curl http://localhost:8000/api/statements/ \
   -H "Authorization: Bearer <access_token>"
+```
 
-# 5. View all transactions
+**5. View all transactions**
+
+```bash
 curl http://localhost:8000/api/transactions/ \
   -H "Authorization: Bearer <access_token>"
+```
 
-# 6. View AI evaluations
+**6. View AI evaluations**
+
+```bash
 curl http://localhost:8000/api/statements/analytics/ \
   -H "Authorization: Bearer <access_token>"
+```
 
-# 7. Download the original PDF of a statement
+**7. Download the original PDF of a statement**
+
+```bash
 curl -OJ http://localhost:8000/api/statements/14/file/ \
   -H "Authorization: Bearer <access_token>"
+```
 
-# 8. Export all of my personal data
+**8. Export all of my personal data**
+
+```bash
 curl http://localhost:8000/api/auth/export/ \
   -H "Authorization: Bearer <access_token>"
+```
 
-# 9. Refresh the token once the access token expires
+**9. Refresh the token once the access token expires**
+
+```bash
 curl -X POST http://localhost:8000/api/auth/refresh/ \
   -H "Content-Type: application/json" \
   -d '{"refresh": "<refresh_token>"}'
+```
 
-# 10. Delete a single bank statement
+**10. Delete a single bank statement**
+
+```bash
 curl -X DELETE http://localhost:8000/api/statements/14/ \
   -H "Authorization: Bearer <access_token>"
+```
 
-# 11. Delete all bank statements (warning: irreversible!)
+**11. Delete all bank statements** *(warning: irreversible!)*
+
+```bash
 curl -X DELETE http://localhost:8000/api/statements/delete-all/ \
   -H "Authorization: Bearer <access_token>"
+```
 
-# 12. Delete my entire account (warning: irreversible!)
+**12. Delete my entire account** *(warning: irreversible!)*
+
+```bash
 curl -X DELETE http://localhost:8000/api/auth/account/ \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
@@ -801,7 +895,7 @@ curl -X DELETE http://localhost:8000/api/auth/account/ \
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 statement_ai/
@@ -830,7 +924,7 @@ statement_ai/
 
 <div align="center">
 
-## 📄 License
+## License
 
 This project is licensed under the [MIT License](LICENSE).
 
