@@ -71,16 +71,58 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'statement_ai.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_DB', 'statement_ai_db'),
-        'USER': os.environ.get('POSTGRES_USER', 'statement_ai_user'),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'statement_ai_password'),
-        'HOST': 'db',
-        'PORT': '5432',
+# --------------------------------------------------------------------------
+# Database
+#
+# Two modes, controlled by DB_ENGINE:
+#   - "local"    (default) -> the docker-compose "db" Postgres container
+#   - "supabase" -> a hosted Supabase Postgres instance
+#
+# Both are plain PostgreSQL under the hood, so the same Django models /
+# migrations work unchanged either way - only the connection details differ.
+# --------------------------------------------------------------------------
+DB_ENGINE = os.environ.get('DB_ENGINE', 'local')
+
+if DB_ENGINE == 'supabase':
+    # Values come from Supabase Dashboard -> Project Settings -> Database
+    # -> "Connection parameters" (use the "Session pooler" or "Transaction
+    # pooler" host for most deployments; the direct host also works for
+    # low-traffic / single-instance setups).
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('SUPABASE_DB_NAME', 'postgres'),
+            'USER': os.environ.get('SUPABASE_DB_USER'),
+            'PASSWORD': os.environ.get('SUPABASE_DB_PASSWORD'),
+            'HOST': os.environ.get('SUPABASE_DB_HOST'),
+            'PORT': os.environ.get('SUPABASE_DB_PORT', '5432'),
+            'OPTIONS': {
+                # Supabase requires TLS on all connections.
+                'sslmode': os.environ.get('SUPABASE_DB_SSLMODE', 'require'),
+            },
+            'CONN_MAX_AGE': int(os.environ.get('SUPABASE_DB_CONN_MAX_AGE', '60')),
+        }
     }
-}
+    if not DEBUG and not all([
+        DATABASES['default']['USER'],
+        DATABASES['default']['PASSWORD'],
+        DATABASES['default']['HOST'],
+    ]):
+        raise RuntimeError(
+            "DB_ENGINE=supabase requires SUPABASE_DB_HOST, SUPABASE_DB_USER "
+            "and SUPABASE_DB_PASSWORD to be set."
+        )
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('POSTGRES_DB', 'statement_ai_db'),
+            'USER': os.environ.get('POSTGRES_USER', 'statement_ai_user'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'statement_ai_password'),
+            'HOST': 'db',
+            'PORT': '5432',
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
