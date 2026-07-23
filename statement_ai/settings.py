@@ -149,6 +149,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    # Ensures unhandled exceptions (e.g. a refresh token pointing at a
+    # since-deleted user) come back as a clean JSON error instead of a
+    # raw Django debug page / opaque 500. See statements/exceptions.py.
+    'EXCEPTION_HANDLER': 'statements.exceptions.custom_exception_handler',
 }
 
 SIMPLE_JWT = {

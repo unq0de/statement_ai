@@ -175,11 +175,43 @@ The API is then available at `http://localhost:8000/api/`.
 | `POSTGRES_DB` | Database name (only used if `DB_ENGINE=local`) | `statement_ai_db` |
 | `POSTGRES_USER` | Database user (only used if `DB_ENGINE=local`) | `statement_ai_user` |
 | `POSTGRES_PASSWORD` | Database password (only used if `DB_ENGINE=local`) | `********` |
+| `SUPABASE_DB_HOST` | Supabase Postgres host (only used if `DB_ENGINE=supabase`) — direct or pooler host, see [Using Supabase](#using-supabase-instead-of-the-local-postgres-container) | `db.xxxxxxxxxxxx.supabase.co` |
+| `SUPABASE_DB_PORT` | Supabase Postgres port (only used if `DB_ENGINE=supabase`) — `5432` direct, `6543` if using the pooler | `5432` |
+| `SUPABASE_DB_NAME` | Supabase database name (only used if `DB_ENGINE=supabase`) | `postgres` |
+| `SUPABASE_DB_USER` | Supabase database user (only used if `DB_ENGINE=supabase`) | `postgres` |
+| `SUPABASE_DB_PASSWORD` | Supabase database password (only used if `DB_ENGINE=supabase`) | `********` |
+| `SUPABASE_DB_SSLMODE` | SSL mode for the Supabase connection (only used if `DB_ENGINE=supabase`); Supabase requires TLS | `require` |
 | `ALLOWED_HOSTS` | Comma-separated hosts (production only) | `api.example.com` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated origins (production only) | `https://app.example.com` |
 | `DATA_RETENTION_DAYS` | Days a bank statement is kept before it becomes eligible for automatic deletion | `365` |
 
 > ⚠️ **Warning:** Never commit your `.env` file. Rotate `SECRET_KEY` and `GEMINI_API_KEY` immediately if they are ever exposed.
+
+### Scheduled Data Retention Cleanup
+
+Bank statements older than `DATA_RETENTION_DAYS` are cleaned up automatically by a dedicated `cron` service in `docker-compose.yml`. It runs the same image as `web`, but only executes `manage.py delete_expired_data` on a daily schedule (`cron/statement-ai-cron`, default `03:00`) and otherwise stays idle.
+
+It starts automatically with:
+
+```bash
+sudo docker compose up -d --build
+```
+
+Check that it's running and inspect its logs with:
+
+```bash
+sudo docker compose logs -f cron
+```
+
+You can also trigger a cleanup manually at any time — both the `web` and `cron` services share the same code and database:
+
+```bash
+sudo docker compose exec cron python manage.py delete_expired_data
+```
+
+This permanently deletes every bank statement (and its transactions and PDF file) whose `uploaded_at` is older than the configured retention period. To change the schedule, edit `cron/statement-ai-cron` and rebuild the `cron` service.
+
+> ℹ️ **Note:** If you'd rather not run the sidecar container, remove the `cron` service from `docker-compose.yml` and schedule `docker compose exec web python manage.py delete_expired_data` via the host's system cron instead.
 
 ---
 
@@ -218,21 +250,25 @@ SUPABASE_DB_SSLMODE=require
 
 You do **not** need to create tables manually in the Supabase SQL editor. The existing Django migrations create the exact same schema automatically — `BankStatement`, `Transaction`, plus Django's own `auth_user`, `django_session`, and so on.
 
+**Start the stack**
+
 ```bash
-docker compose up -d --build web cron
+docker compose up -d --build
 ```
 
-*Skips the now-unused local `db` service.*
+With `DB_ENGINE=supabase` set in `.env`, the local `db` service is skipped automatically — it only starts for `DB_ENGINE=local`, so there's no need to name `web`/`cron` explicitly anymore.
+
+**Run migrations**
 
 ```bash
 docker compose exec web python manage.py migrate
 ```
 
+**Create an admin user** *(optional, for `/admin`)*
+
 ```bash
 docker compose exec web python manage.py createsuperuser
 ```
-
-*Optional.*
 
 That's it — zero changes needed to `models.py`, `views.py`, or `serializers.py`.
 
@@ -265,37 +301,6 @@ This project already has its own GDPR/retention logic (`delete_expired_data`), J
 
 > ✅ **Tip:** All variables in the table above — including `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and the `POSTGRES_*` credentials — are forwarded from `.env` into the `web`, `cron`, and `db` containers via `docker-compose.yml`. Changing a value in `.env` and rebuilding is enough; you don't need to edit `docker-compose.yml` by hand.
 
-<details>
-<summary><b>Scheduled Data Retention Cleanup</b> (click to expand)</summary>
-
-<br>
-
-Bank statements older than `DATA_RETENTION_DAYS` are cleaned up automatically by a dedicated `cron` service in `docker-compose.yml`. It runs the same image as `web`, but only executes `manage.py delete_expired_data` on a daily schedule (`cron/statement-ai-cron`, default `03:00`) and otherwise stays idle.
-
-It starts automatically with:
-
-```bash
-sudo docker compose up -d --build
-```
-
-Check that it's running and inspect its logs with:
-
-```bash
-sudo docker compose logs -f cron
-```
-
-You can also trigger a cleanup manually at any time — both the `web` and `cron` services share the same code and database:
-
-```bash
-sudo docker compose exec cron python manage.py delete_expired_data
-```
-
-This permanently deletes every bank statement (and its transactions and PDF file) whose `uploaded_at` is older than the configured retention period. To change the schedule, edit `cron/statement-ai-cron` and rebuild the `cron` service.
-
-> ℹ️ **Note:** If you'd rather not run the sidecar container, remove the `cron` service from `docker-compose.yml` and schedule `docker compose exec web python manage.py delete_expired_data` via the host's system cron instead.
-
-</details>
-
 ---
 
 ## Privacy & GDPR
@@ -309,6 +314,8 @@ Statement AI processes financial data extracted from bank statements, which is p
 | 📤 **Right of access / portability** | [`GET /api/auth/export/`](#13-export-my-data) returns all personal data as JSON |
 | 🔒 **Access control** | PDFs are never publicly reachable, only via the [authenticated download endpoint](#12-download-the-original-pdf) |
 | 🌍 **Third-country data transfer** | Statement content is sent to **Google Gemini** (Google LLC, USA) for AI processing |
+
+> 🤖 **Note on Gemini data usage:** This project uses a `GEMINI_API_KEY` from the Gemini API's **paid quota** (i.e. a Cloud project with an active billing account). According to Google's own terms, on Paid Services Google does **not** use your prompts or the PDF/statement content you submit, nor the generated responses, to improve its products or train models; prompts and responses are only logged for a limited time solely to detect and prevent violations of Google's Prohibited Use Policy and for required legal/regulatory disclosures. This is a different (and stricter) data handling regime than the **free/unpaid** Gemini tier, where submitted content and responses *may* be used by Google to improve its products and may be reviewed by humans. If you run this project on the free tier, treat it as unsuitable for real users' financial data. See Google's official **[Gemini API Additional Terms of Service](https://ai.google.dev/gemini-api/terms)**, sections "Paid Services → How Google Uses Your Data" and "Unpaid Services → How Google Uses Your Data", for the authoritative wording.
 
 > ⚖️ **Disclaimer:** This section describes the technical measures available in the API — **not legal advice**. Consult a data protection professional before processing real users' financial data in production. If you operate this API for real users in the EU/EEA, you are responsible for having a valid legal basis and a Data Processing Agreement (DPA) with Google covering this transfer.
 
@@ -343,21 +350,22 @@ Once the access token expires, use the [refresh endpoint](#5-refresh-token) to o
 
 | Method | Path | Auth Required | Description |
 |---|---|---|---|
-| 🟢 `POST` | `/api/auth/register/` | No | Register a new user |
-| 🟢 `POST` | `/api/auth/login/` | No | Obtain access & refresh tokens |
-| 🟢 `POST` | `/api/auth/refresh/` | No (refresh token required) | Obtain a new access token |
-| 🔴 `DELETE` | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
-| 🔵 `GET` | `/api/auth/export/` | Yes | Export all personal data as JSON |
-| 🔵 `GET` | `/api/statements/` | Yes | List your own bank statements |
-| 🟢 `POST` | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
-| 🔵 `GET` | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
-| 🔴 `DELETE` | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
-| 🔴 `DELETE` | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
-| 🔵 `GET` | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
-| 🔵 `GET` | `/api/transactions/` | Yes | List your own transactions |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/register/` | No | Register a new user |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/login/` | No | Obtain access & refresh tokens |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/refresh/` | No (refresh token required) | Obtain a new access token |
+| ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/auth/export/` | Yes | Export all personal data as JSON |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/` | Yes | List your own bank statements |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
+| ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
+| ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/transactions/` | Yes | List your own transactions |
 
+<a id="3-register-a-user"></a>
 <details>
-<summary><h3>3. Register a User</h3></summary>
+<summary><b>3. Register a User</b></summary>
 
 Creates a new user account.
 
@@ -400,8 +408,9 @@ Creates a new user account.
 
 </details>
 
+<a id="4-login-obtain-token"></a>
 <details>
-<summary><h3>4. Login (Obtain Token)</h3></summary>
+<summary><b>4. Login (Obtain Token)</b></summary>
 
 Exchanges username + password for a token pair.
 
@@ -431,8 +440,9 @@ Exchanges username + password for a token pair.
 
 </details>
 
+<a id="5-refresh-token"></a>
 <details>
-<summary><h3>5. Refresh Token</h3></summary>
+<summary><b>5. Refresh Token</b></summary>
 
 Issues a new access token from a valid refresh token.
 
@@ -456,12 +466,13 @@ Issues a new access token from a valid refresh token.
 
 **Error Cases**
 
-- `401 Unauthorized` – Refresh token expired or invalid → user must log in again.
+- `401 Unauthorized` – Refresh token expired or invalid, or the user it refers to no longer exists (e.g. account deleted, database reset) → user must log in again.
 
 </details>
 
+<a id="6-upload-a-bank-statement"></a>
 <details>
-<summary><h3>6. Upload a Bank Statement</h3></summary>
+<summary><b>6. Upload a Bank Statement</b></summary>
 
 Uploads a PDF file, has it analyzed by Gemini AI, and automatically saves the detected transactions to the database. This request can take a few seconds depending on file size, since it waits synchronously for the AI response.
 
@@ -493,7 +504,7 @@ curl -X POST http://localhost:8000/api/statements/upload/ \
 {
   "message": "Bank statement processed successfully.",
   "statement_id": 14,
-  "ai_evaluation": "This statement shows a healthy balance between income and recurring expenses. The primary income source is a monthly salary deposit of $3,200.00. Notable spending categories include Housing & Utilities and Groceries & Food..."
+  "ai_evaluation": "Your finances look healthy this month, with your salary of $3,200.00 comfortably covering your regular expenses. Most of your spending went toward Housing & Utilities and Groceries & Food. Keep an eye on your subscriptions, as they're adding up steadily each month."
 }
 ```
 
@@ -521,8 +532,9 @@ The individually detected transactions are **not** included directly in this res
 
 </details>
 
+<a id="7-list-bank-statements"></a>
 <details>
-<summary><h3>7. List Bank Statements</h3></summary>
+<summary><b>7. List Bank Statements</b></summary>
 
 Lists all bank statements of the logged-in user, newest first.
 
@@ -537,7 +549,7 @@ Lists all bank statements of the logged-in user, newest first.
     "file": "/media/statements/2026/07/statement_july.pdf",
     "uploaded_at": "2026-07-22T18:32:10Z",
     "is_processed": true,
-    "ai_evaluation": "This statement shows a healthy balance...",
+    "ai_evaluation": "Your finances look healthy this month, with your salary comfortably covering your regular expenses...",
     "transactions": [
       {
         "id": 101,
@@ -557,8 +569,9 @@ Lists all bank statements of the logged-in user, newest first.
 
 </details>
 
+<a id="8-delete-a-bank-statement"></a>
 <details>
-<summary><h3>8. Delete a Bank Statement</h3></summary>
+<summary><b>8. Delete a Bank Statement</b></summary>
 
 Deletes a single bank statement, including its file and all associated transactions (cascade).
 
@@ -585,8 +598,9 @@ curl -X DELETE http://localhost:8000/api/statements/14/ \
 
 </details>
 
+<a id="9-delete-all-bank-statements"></a>
 <details>
-<summary><h3>9. Delete All Bank Statements</h3></summary>
+<summary><b>9. Delete All Bank Statements</b></summary>
 
 Permanently deletes **all** bank statements and transactions of the logged-in user, including the physical PDF files.
 
@@ -604,8 +618,9 @@ Permanently deletes **all** bank statements and transactions of the logged-in us
 
 </details>
 
+<a id="10-list-transactions"></a>
 <details>
-<summary><h3>10. List Transactions</h3></summary>
+<summary><b>10. List Transactions</b></summary>
 
 Lists all transactions from all bank statements of the logged-in user, sorted by date (newest first).
 
@@ -640,8 +655,9 @@ Lists all transactions from all bank statements of the logged-in user, sorted by
 
 </details>
 
+<a id="11-analytics-ai-evaluations"></a>
 <details>
-<summary><h3>11. Analytics (AI Evaluations)</h3></summary>
+<summary><b>11. Analytics (AI Evaluations)</b></summary>
 
 Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statements that have already been successfully processed.
 
@@ -652,8 +668,8 @@ Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statement
 ```json
 {
   "evaluations": [
-    { "id": 14, "evaluation": "This statement shows a healthy balance..." },
-    { "id": 12, "evaluation": "Spending was notably higher this month due to..." }
+    { "id": 14, "evaluation": "Your finances look healthy this month, with your salary comfortably covering your regular expenses..." },
+    { "id": 12, "evaluation": "Your spending was notably higher this month, mainly due to..." }
   ]
 }
 ```
@@ -662,8 +678,9 @@ Returns the AI-generated text evaluation (`ai_evaluation`) of all bank statement
 
 </details>
 
+<a id="12-download-the-original-pdf"></a>
 <details>
-<summary><h3>12. Download the Original PDF</h3></summary>
+<summary><b>12. Download the Original PDF</b></summary>
 
 Streams the original uploaded PDF file of a bank statement. This is the only supported way to retrieve the file in production, since `/media/` is not publicly exposed there.
 
@@ -684,8 +701,9 @@ curl -OJ http://localhost:8000/api/statements/14/file/ \
 
 </details>
 
+<a id="13-export-my-data"></a>
 <details>
-<summary><h3>13. Export My Data</h3></summary>
+<summary><b>13. Export My Data</b></summary>
 
 Returns all personal data stored about the authenticated user — profile info plus every bank statement and its transactions — as a single JSON document (GDPR Art. 15 right of access / Art. 20 data portability). Original PDF files are referenced by download URL rather than embedded.
 
@@ -706,7 +724,7 @@ Returns all personal data stored about the authenticated user — profile info p
       "file": "/media/statements/2026/07/statement_july.pdf",
       "uploaded_at": "2026-07-22T18:32:10Z",
       "is_processed": true,
-      "ai_evaluation": "This statement shows a healthy balance...",
+      "ai_evaluation": "Your finances look healthy this month, with your salary comfortably covering your regular expenses...",
       "transactions": [ ],
       "file_download_url": "/api/statements/14/file/"
     }
@@ -716,8 +734,9 @@ Returns all personal data stored about the authenticated user — profile info p
 
 </details>
 
+<a id="14-delete-my-account"></a>
 <details>
-<summary><h3>14. Delete My Account</h3></summary>
+<summary><b>14. Delete My Account</b></summary>
 
 Permanently deletes the authenticated user's account, including all bank statements, transactions, and uploaded PDF files (GDPR Art. 17 right to erasure). Requires the current password as confirmation.
 
@@ -747,8 +766,9 @@ Permanently deletes the authenticated user's account, including all bank stateme
 
 </details>
 
+<a id="15-data-models"></a>
 <details>
-<summary><h3>15. Data Models</h3></summary>
+<summary><b>15. Data Models</b></summary>
 
 **BankStatement**
 
@@ -758,7 +778,7 @@ Permanently deletes the authenticated user's account, including all bank stateme
 | `file` | string (URL) | Path/URL to the stored PDF file (use the [download endpoint](#12-download-the-original-pdf) in production) |
 | `uploaded_at` | datetime (ISO 8601, UTC) | Upload timestamp; also the basis for the retention cleanup |
 | `is_processed` | boolean | `true` once AI processing has completed successfully |
-| `ai_evaluation` | string \| null | Free-text summary from the AI (always in English) |
+| `ai_evaluation` | string \| null | Free-text summary from the AI (always in English, max. 3 sentences, written directly to "you" in a friendly, professional financial-advisor tone) |
 | `transactions` | Transaction[] | Associated transactions (only included in the list view) |
 
 **Transaction**
@@ -779,8 +799,9 @@ Permanently deletes the authenticated user's account, including all bank stateme
 
 </details>
 
+<a id="16-error-format"></a>
 <details>
-<summary><h3>16. Error Format</h3></summary>
+<summary><b>16. Error Format</b></summary>
 
 Errors are returned consistently as a JSON object with an `error` field (exception: registration validation errors, which are field-specific):
 
@@ -795,10 +816,13 @@ Errors are returned consistently as a JSON object with an `error` field (excepti
 | `404 Not Found` | Resource does not exist or belongs to another user |
 | `500 Internal Server Error` | Unexpected server error (e.g. AI processing failed) |
 
+> ℹ️ **Note:** A project-wide DRF exception handler guarantees this `{"error": "..."}` format even for cases DRF wouldn't normally catch cleanly — for example, a cryptographically valid refresh/access token whose underlying user no longer exists (deleted account, reset database, switched `DB_ENGINE`) is returned as a clean `401 Unauthorized` with `{"error": "Invalid or expired token."}` instead of an opaque `500`. All other unexpected exceptions are still logged server-side with a full traceback, but only ever exposed to the client as a generic `500` message.
+
 </details>
 
+<a id="17-typical-flow-end-to-end-example"></a>
 <details open>
-<summary><h3>17. Typical Flow (End-to-End Example)</h3></summary>
+<summary><b>17. Typical Flow (End-to-End Example)</b></summary>
 
 **1. Register**
 
@@ -899,24 +923,35 @@ curl -X DELETE http://localhost:8000/api/auth/account/ \
 
 ```
 statement_ai/
-├── statement_ai/          # Django project (settings, urls, wsgi)
-├── statements/             # Main app
-│   ├── models.py           # BankStatement & Transaction models
-│   ├── serializers.py      # DRF serializers
-│   ├── services.py         # Gemini AI integration
-│   ├── views.py            # API views
-│   ├── urls.py              # App-level routes
+├── statement_ai/                 # Django project
+│   ├── settings.py                # Settings, incl. local/Supabase DB switch & global exception handler
+│   ├── urls.py                    # Root URL config (includes statements/urls.py under /api/)
+│   └── wsgi.py                    # WSGI entrypoint
+├── statements/                   # Main app
+│   ├── models.py                  # BankStatement & Transaction models
+│   ├── serializers.py             # DRF serializers
+│   ├── services.py                # Gemini AI integration (extraction, categorization, evaluation)
+│   ├── views.py                   # API views
+│   ├── urls.py                    # App-level routes
+│   ├── exceptions.py              # Project-wide DRF exception handler (consistent JSON errors)
 │   ├── management/
 │   │   └── commands/
 │   │       └── delete_expired_data.py   # GDPR retention cleanup command
 │   └── migrations/
+│       ├── 0001_initial.py
+│       └── 0002_transaction_payee_payer_and_more.py
 ├── cron/
-│   ├── entrypoint.sh        # Cron sidecar entrypoint
-│   └── statement-ai-cron    # Crontab: daily retention cleanup schedule
-├── .env.example             # Template for required environment variables
+│   ├── entrypoint.sh              # Cron sidecar entrypoint
+│   └── statement-ai-cron          # Crontab: daily retention cleanup schedule
+├── .github/
+│   └── workflows/
+│       └── codacy.yml             # Codacy security scan CI workflow
+├── manage.py                     # Django management CLI
+├── .env.example                   # Template for required environment variables
+├── .gitignore
 ├── docker-compose.yml
 ├── Dockerfile
-├── LICENSE                  # MIT License
+├── LICENSE                        # MIT License
 └── requirements.txt
 ```
 

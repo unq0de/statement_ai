@@ -59,12 +59,12 @@ services:
         condition: service_started
         required: false
 
-  # Only needed when DB_ENGINE=local (the default). If you set DB_ENGINE=supabase
-  # in your .env, this container still starts but is simply unused - you can
-  # remove it from `docker compose up` with:
-  #   docker compose up -d --build web cron
+  # Only starts when the "local" profile is active (the default - see below).
+  # With DB_ENGINE=supabase this container is skipped entirely instead of
+  # just sitting there unused.
   db:
     image: postgres:15-alpine
+    profiles: [ "local" ]
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-statement_ai_db}
       - POSTGRES_USER=${POSTGRES_USER:-statement_ai_user}
