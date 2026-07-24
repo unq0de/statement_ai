@@ -1,0 +1,27 @@
+theme: jekyll-theme-minimal
+title: Statement AI
+description: AI-powered REST API that extracts, categorizes and summarizes bank statement transactions from PDFs using Google Gemini and Django REST Framework.
+
+# Project-page base path. Change this if the repo is ever renamed.
+baseurl: "/statement_ai"
+
+# Pretty URLs: "/getting-started/" instead of "/getting-started.html"
+permalink: pretty
+
+show_downloads: false
+
+# Apply the theme's default layout to every page automatically,
+# so individual pages only need an empty front matter block ("---\n---").
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+exclude:
+  - README.md
