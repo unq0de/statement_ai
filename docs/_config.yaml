@@ -1,0 +1,35 @@
+title: Statement AI
+tagline: Technical Reference & Self-Hosting Guide
+description: >-
+  Documentation for Statement AI — a self-hosted Django REST API that reads
+  bank statement PDFs, categorizes transactions via Gemini, and exposes a
+  JWT-secured API with GDPR-ready data controls.
+repository: your-username/statement-ai
+baseurl: ""
+url: ""
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  hard_wrap: false
+
+sass:
+  style: compressed
+
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: "default"
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - _docs_source.md
+  - README-DEV.md
+  - node_modules
