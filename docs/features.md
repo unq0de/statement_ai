@@ -1,5 +1,6 @@
 ---
 title: Features & Tech Stack
+layout: default
 ---
 
 # Features & Tech Stack

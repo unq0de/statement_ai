@@ -2,8 +2,10 @@ theme: jekyll-theme-minimal
 title: Statement AI
 description: AI-powered REST API that extracts, categorizes and summarizes bank statement transactions from PDFs using Google Gemini and Django REST Framework.
 
-# Project-page base path. Change this if the repo is ever renamed.
-baseurl: "/statement_ai"
+# This site is served at the domain root (https://unq0de.github.io/), so no
+# baseurl prefix is needed. Only set this to "/repo-name" if you ever move
+# the docs to a project-page URL like https://<user>.github.io/<repo>/.
+baseurl: ""
 
 # Pretty URLs: "/getting-started/" instead of "/getting-started.html"
 permalink: pretty
@@ -29,13 +31,11 @@ nav:
   - title: Project Structure
     url: /project-structure/
 
-# Apply the theme's default layout to every page automatically,
-# so individual pages only need an empty front matter block ("---\n---").
-defaults:
-  - scope:
-      path: ""
-    values:
-      layout: default
+# NOTE: layout is set explicitly per-page (front matter) instead of via a
+# global "defaults" rule here. A site-wide default that also matches
+# assets/css/style.scss would make Jekyll try to run the stylesheet through
+# the HTML layout too, which silently breaks the CSS build. Keeping it
+# per-page avoids that trap entirely.
 
 markdown: kramdown
 kramdown:

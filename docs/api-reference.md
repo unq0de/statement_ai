@@ -1,5 +1,6 @@
 ---
 title: API Reference
+layout: default
 ---
 
 # API Reference

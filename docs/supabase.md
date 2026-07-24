@@ -1,5 +1,6 @@
 ---
 title: Using Supabase
+layout: default
 ---
 
 # Using Supabase Instead of the Local Postgres Container

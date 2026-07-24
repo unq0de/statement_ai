@@ -1,5 +1,6 @@
 ---
 title: Statement AI Documentation
+layout: default
 ---
 
 # Statement AI
