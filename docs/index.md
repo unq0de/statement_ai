@@ -2,13 +2,6 @@
 title: Statement AI Documentation
 ---
 
-[Getting Started]({{ site.baseurl }}/getting-started/) ·
-[Features & Tech Stack]({{ site.baseurl }}/features/) ·
-[Using Supabase]({{ site.baseurl }}/supabase/) ·
-[Privacy & GDPR]({{ site.baseurl }}/privacy-gdpr/) ·
-[API Reference]({{ site.baseurl }}/api-reference/) ·
-[Project Structure]({{ site.baseurl }}/project-structure/)
-
 # Statement AI
 
 **AI-powered REST API that reads bank statement PDFs, categorizes every transaction, and generates financial summaries.**

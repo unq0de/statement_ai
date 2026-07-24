@@ -2,13 +2,6 @@
 title: Getting Started
 ---
 
-[Home]({{ site.baseurl }}/) ·
-[Features & Tech Stack]({{ site.baseurl }}/features/) ·
-[Using Supabase]({{ site.baseurl }}/supabase/) ·
-[Privacy & GDPR]({{ site.baseurl }}/privacy-gdpr/) ·
-[API Reference]({{ site.baseurl }}/api-reference/) ·
-[Project Structure]({{ site.baseurl }}/project-structure/)
-
 # Getting Started
 
 ## Prerequisites

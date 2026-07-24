@@ -2,13 +2,6 @@
 title: API Reference
 ---
 
-[Home]({{ site.baseurl }}/) ·
-[Getting Started]({{ site.baseurl }}/getting-started/) ·
-[Features & Tech Stack]({{ site.baseurl }}/features/) ·
-[Using Supabase]({{ site.baseurl }}/supabase/) ·
-[Privacy & GDPR]({{ site.baseurl }}/privacy-gdpr/) ·
-[Project Structure]({{ site.baseurl }}/project-structure/)
-
 # API Reference
 
 **Base URL (local):** `http://localhost:8000/api/` &nbsp;|&nbsp; **Format:** JSON (exception: file upload as `multipart/form-data`) &nbsp;|&nbsp; **Authentication:** JWT (Bearer Token)

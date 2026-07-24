@@ -1,55 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ site.lang | default: "en-US" }}">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ page.title | default: site.title }} — {{ site.title }}</title>
-  <meta name="description" content="{{ page.description | default: site.description }}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
   {% seo %}
+  <link rel="stylesheet" href="{{ "/assets/css/style.css?v=" | append: site.github.build_revision | relative_url }}">
+  {% include head-custom.html %}
 </head>
 <body>
+  <input type="checkbox" id="nav-toggle" class="nav-toggle">
 
-  <div class="topbar">
-    <span class="brand">Statement AI · Docs</span>
-    <button class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="sidebar">Menu</button>
-  </div>
+  <div class="page-wrapper">
 
-  <div class="shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="brand-block">
-        <span class="brand-mark">S</span>
-        <p class="brand-title">Statement AI</p>
-        <p class="brand-sub">Documentation</p>
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <a href="{{ "/" | relative_url }}" class="sidebar-title">{{ site.title | default: site.github.repository_name }}</a>
+        <p class="sidebar-description">{{ site.description | default: site.github.project_tagline }}</p>
       </div>
 
-      <ul class="side-nav">
-        <li><a href="#features"><span class="num">01</span>Features</a></li>
-        <li><a href="#tech-stack"><span class="num">02</span>Tech Stack</a></li>
-        <li><a href="#getting-started"><span class="num">03</span>Getting Started</a></li>
-        <li><a href="#using-supabase-instead-of-the-local-postgres-container"><span class="num">04</span>Using Supabase</a></li>
-        <li><a href="#privacy--gdpr"><span class="num">05</span>Privacy &amp; GDPR</a></li>
-        <li><a href="#api-reference"><span class="num">06</span>API Reference</a></li>
-        <li><a href="#project-structure"><span class="num">07</span>Project Structure</a></li>
+      <ul class="sidebar-nav">
+        {% for item in site.nav %}
+          {% assign item_url = item.url | relative_url %}
+          {% if page.url == item.url %}
+            <li class="active"><a href="{{ item_url }}">{{ item.title }}</a></li>
+          {% else %}
+            <li><a href="{{ item_url }}">{{ item.title }}</a></li>
+          {% endif %}
+        {% endfor %}
       </ul>
 
-      <div class="side-foot">
-        <p><a href="{{ '/' | relative_url }}../README.md">&larr; Back to README</a></p>
-        {% if site.repository %}<p><a href="https://github.com/{{ site.repository }}">Repository on GitHub</a></p>{% endif %}
+      {% if site.github.is_project_page %}
+      <div class="sidebar-footer">
+        <a href="{{ site.github.repository_url }}">View on GitHub ↗</a>
       </div>
-    </aside>
+      {% endif %}
+    </nav>
 
-    <main class="main">
-      <article class="paper">
-        {{ content }}
-        <div class="content-foot">Statement AI — self-hosted · MIT licensed</div>
-      </article>
+    <label for="nav-toggle" class="nav-toggle-label">
+      <span></span>Menu
+    </label>
+
+    <main class="content">
+      {{ content }}
+
+      <footer class="content-footer">
+        {% if site.github.is_project_page %}
+        <p>This project is maintained by <a href="{{ site.github.owner_url }}">{{ site.github.owner_name }}</a></p>
+        {% endif %}
+        <p><small>Hosted on GitHub Pages</small></p>
+      </footer>
     </main>
-  </div>
 
-  <script src="{{ '/assets/js/main.js' | relative_url }}"></script>
+  </div>
 </body>
 </html>

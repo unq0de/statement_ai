@@ -2,13 +2,6 @@
 title: Features & Tech Stack
 ---
 
-[Home]({{ site.baseurl }}/) ·
-[Getting Started]({{ site.baseurl }}/getting-started/) ·
-[Using Supabase]({{ site.baseurl }}/supabase/) ·
-[Privacy & GDPR]({{ site.baseurl }}/privacy-gdpr/) ·
-[API Reference]({{ site.baseurl }}/api-reference/) ·
-[Project Structure]({{ site.baseurl }}/project-structure/)
-
 # Features & Tech Stack
 
 ## Features

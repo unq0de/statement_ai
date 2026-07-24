@@ -10,6 +10,25 @@ permalink: pretty
 
 show_downloads: false
 
+# Single source of truth for the sidebar navigation.
+# Add/remove/reorder pages here — the layout renders this list automatically
+# and highlights whichever page is currently active.
+nav:
+  - title: Home
+    url: /
+  - title: Getting Started
+    url: /getting-started/
+  - title: Features & Tech Stack
+    url: /features/
+  - title: Using Supabase
+    url: /supabase/
+  - title: Privacy & GDPR
+    url: /privacy-gdpr/
+  - title: API Reference
+    url: /api-reference/
+  - title: Project Structure
+    url: /project-structure/
+
 # Apply the theme's default layout to every page automatically,
 # so individual pages only need an empty front matter block ("---\n---").
 defaults:

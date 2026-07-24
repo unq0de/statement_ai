@@ -1,60 +1,253 @@
 ---
 ---
 
-@import "{{ site.theme }}";
+/* Custom layout: fixed left sidebar with page nav + scrollable content column.
+   Written standalone (not built on top of jekyll-theme-minimal's own CSS)
+   since the HTML structure in _layouts/default.html was replaced. */
 
-/* --- GitHub-flavored overrides on top of jekyll-theme-minimal --- */
+:root {
+  --sidebar-width: 260px;
+  --content-max-width: 800px;
+  --border-color: #d1d9e0;
+  --text-color: #1f2328;
+  --muted-color: #59636e;
+  --link-color: #0969da;
+  --link-hover: #0550ae;
+  --sidebar-bg: #f6f8fa;
+  --active-bg: #ddf4ff;
+  --code-bg: #f6f8fa;
+}
+
+* {
+  box-sizing: border-box;
+}
 
 body {
+  margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
     sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  color: #1f2328;
+  color: var(--text-color);
+  line-height: 1.6;
 }
 
 a {
-  color: #0969da;
+  color: var(--link-color);
+  text-decoration: none;
 }
 a:hover {
-  color: #0550ae;
+  color: var(--link-hover);
+  text-decoration: underline;
 }
 
-h1, h2, h3, h4, h5, h6 {
-  border-bottom: 1px solid #d1d9e0;
+.page-wrapper {
+  display: flex;
+  min-height: 100vh;
+  align-items: flex-start;
+}
+
+/* ---------- Sidebar ---------- */
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  padding: 24px 20px;
+}
+
+.sidebar-header {
+  margin-bottom: 20px;
+}
+
+.sidebar-title {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-color);
+}
+.sidebar-title:hover {
+  color: var(--link-color);
+  text-decoration: none;
+}
+
+.sidebar-description {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted-color);
+}
+
+.sidebar-nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+}
+
+.sidebar-nav li {
+  margin: 2px 0;
+}
+
+.sidebar-nav a {
+  display: block;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: var(--text-color);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.sidebar-nav a:hover {
+  background: #eaeef2;
+  text-decoration: none;
+}
+
+.sidebar-nav li.active a {
+  background: var(--active-bg);
+  color: var(--link-color);
+  font-weight: 700;
+}
+
+.sidebar-footer {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.85rem;
+}
+
+/* ---------- Mobile nav toggle (checkbox hack, no JS needed) ---------- */
+
+.nav-toggle {
+  display: none;
+}
+
+.nav-toggle-label {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 12px 20px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--sidebar-bg);
+}
+
+.nav-toggle-label span {
+  width: 18px;
+  height: 2px;
+  background: var(--text-color);
+  position: relative;
+}
+.nav-toggle-label span::before,
+.nav-toggle-label span::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 18px;
+  height: 2px;
+  background: var(--text-color);
+}
+.nav-toggle-label span::before { top: -6px; }
+.nav-toggle-label span::after { top: 6px; }
+
+/* ---------- Content ---------- */
+
+.content {
+  flex: 1;
+  min-width: 0;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  padding: 40px 32px;
+}
+
+.content h1, .content h2, .content h3,
+.content h4, .content h5, .content h6 {
+  border-bottom: 1px solid var(--border-color);
   padding-bottom: 0.3em;
 }
 
-#header_wrap, .site-header {
-  background: #24292f;
-}
+.content h1 { margin-top: 0; }
 
-code, pre, tt {
-  background-color: #f6f8fa;
+.content pre, .content code {
+  background-color: var(--code-bg);
   border-radius: 6px;
 }
-
-pre {
-  border: 1px solid #d1d9e0;
+.content pre {
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  overflow-x: auto;
+}
+.content code {
+  padding: 0.2em 0.4em;
+}
+.content pre code {
+  padding: 0;
+  background: none;
 }
 
-table {
+.content table {
   border-collapse: collapse;
   width: 100%;
+  margin-bottom: 1em;
 }
-table th, table td {
-  border: 1px solid #d1d9e0;
+.content table th, .content table td {
+  border: 1px solid var(--border-color);
   padding: 6px 13px;
 }
-table tr:nth-child(2n) {
-  background-color: #f6f8fa;
+.content table tr:nth-child(2n) {
+  background-color: var(--code-bg);
 }
 
-blockquote {
-  border-left: 0.25em solid #d1d9e0;
-  color: #59636e;
+.content blockquote {
+  border-left: 0.25em solid var(--border-color);
+  color: var(--muted-color);
   padding: 0 1em;
+  margin-left: 0;
 }
 
-details summary {
+.content details summary {
   cursor: pointer;
   font-weight: 600;
+  padding: 4px 0;
+}
+
+.content-footer {
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+  color: var(--muted-color);
+  font-size: 0.85rem;
+}
+
+/* ---------- Responsive: collapse sidebar below the content on small screens ---------- */
+
+@media (max-width: 800px) {
+  .page-wrapper {
+    flex-direction: column;
+  }
+
+  .nav-toggle-label {
+    display: flex;
+  }
+
+  .sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    display: none;
+  }
+
+  .nav-toggle:checked ~ .page-wrapper .sidebar {
+    display: block;
+  }
+
+  .content {
+    padding: 24px 20px;
+  }
 }

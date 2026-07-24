@@ -2,13 +2,6 @@
 title: Using Supabase
 ---
 
-[Home]({{ site.baseurl }}/) ·
-[Getting Started]({{ site.baseurl }}/getting-started/) ·
-[Features & Tech Stack]({{ site.baseurl }}/features/) ·
-[Privacy & GDPR]({{ site.baseurl }}/privacy-gdpr/) ·
-[API Reference]({{ site.baseurl }}/api-reference/) ·
-[Project Structure]({{ site.baseurl }}/project-structure/)
-
 # Using Supabase Instead of the Local Postgres Container
 
 Supabase is a hosted **PostgreSQL** database. This project already talks to Postgres via Django's `psycopg2` backend, so pointing it at Supabase is just a matter of changing connection settings:

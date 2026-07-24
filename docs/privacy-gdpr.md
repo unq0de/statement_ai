@@ -2,13 +2,6 @@
 title: Privacy & GDPR
 ---
 
-[Home]({{ site.baseurl }}/) ·
-[Getting Started]({{ site.baseurl }}/getting-started/) ·
-[Features & Tech Stack]({{ site.baseurl }}/features/) ·
-[Using Supabase]({{ site.baseurl }}/supabase/) ·
-[API Reference]({{ site.baseurl }}/api-reference/) ·
-[Project Structure]({{ site.baseurl }}/project-structure/)
-
 # Privacy & GDPR
 
 Statement AI processes financial data extracted from bank statements, which is personal data under the GDPR. The following measures are implemented:
