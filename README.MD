@@ -24,7 +24,8 @@
 
 <p>
   <a href="#quickstart">Quickstart</a> ·
-  <a href="docs/index.md">Full Documentation</a>
+  <a href="https://unq0de.github.io/statement_ai/"><b>📖 Full Documentation</b></a> ·
+  <a href="#disclaimer">Disclaimer</a>
 </p>
 
 </div>
@@ -76,15 +77,15 @@ docker compose exec web python manage.py createsuperuser
 
 The API is now running at `http://localhost:8000/api/`.
 
-For all environment variables, the Supabase setup, GDPR/retention configuration, the full API reference, and the project structure, see the **[full documentation](docs/index.md)** (published via GitHub Pages once `/docs` is enabled as the Pages source).
+📖 For the full guide — environment variables, using Supabase instead of local Postgres, retention cleanup, all API endpoints, data models, and the project structure — see the **[full documentation](https://unq0de.github.io/statement_ai/)**.
 
 ---
 
-## Privacy & GDPR Disclaimer
+## Disclaimer
 
-Statement AI processes financial data extracted from bank statements, which is personal data under the GDPR. Technical measures (retention limits, account erasure, data export, access control) are implemented and described in the [full documentation](docs/index.md#privacy--gdpr).
+Statement AI processes financial data extracted from bank statements, which is personal data under the GDPR. Technical measures such as JWT-secured access, per-user data isolation, configurable data retention, and personal data export/erasure endpoints are implemented — see the [Privacy & GDPR page](https://unq0de.github.io/statement_ai/privacy-gdpr/) in the full documentation for details.
 
-> ⚖️ **Disclaimer:** This is **not legal advice**. Consult a data protection professional before processing real users' financial data in production. If you operate this API for real users in the EU/EEA, you are responsible for having a valid legal basis and a Data Processing Agreement (DPA) with Google covering the transfer of statement content to Gemini.
+> ⚖️ This project's privacy and GDPR-related features describe the **technical measures available in the API** — **not legal advice**. Consult a data protection professional before processing real users' financial data in production. If you operate this API for real users in the EU/EEA, you are responsible for having a valid legal basis and a Data Processing Agreement (DPA) with Google covering the transfer of statement data to Gemini (Google LLC, USA).
 
 ---
 
