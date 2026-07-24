@@ -5,7 +5,7 @@ description: AI-powered REST API that extracts, categorizes and summarizes bank 
 # This site is served at the domain root (https://unq0de.github.io/), so no
 # baseurl prefix is needed. Only set this to "/repo-name" if you ever move
 # the docs to a project-page URL like https://<user>.github.io/<repo>/.
-baseurl: ""
+baseurl: "/statement_ai"
 
 # Pretty URLs: "/getting-started/" instead of "/getting-started.html"
 permalink: pretty
