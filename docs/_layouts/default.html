@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: "en-US" }}">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% seo %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ "/assets/css/style.css?v=" | append: site.github.build_revision | relative_url }}">
+  {% include head-custom.html %}
+</head>
+<body>
+  <input type="checkbox" id="nav-toggle" class="nav-toggle">
+
+  <div class="page-wrapper">
+
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-kicker">Documentation</span>
+        <a href="{{ "/" | relative_url }}" class="sidebar-title">{{ site.title | default: site.github.repository_name }}</a>
+        <p class="sidebar-description">{{ site.description | default: site.github.project_tagline }}</p>
+      </div>
+
+      <p class="sidebar-nav-label">Contents</p>
+      <ul class="sidebar-nav">
+        {% for item in site.nav %}
+          {% assign item_url = item.url | relative_url %}
+          {% if page.url == item.url %}
+            <li class="active"><a href="{{ item_url }}">{{ item.title }}</a></li>
+          {% else %}
+            <li><a href="{{ item_url }}">{{ item.title }}</a></li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+
+      <div class="sidebar-footer">
+        <a href="https://github.com/unq0de/statement_ai">View on GitHub ↗</a>
+      </div>
+    </nav>
+
+    <label for="nav-toggle" class="nav-toggle-label">
+      <span class="burger"><span></span></span>
+      Menu
+    </label>
+
+    <main class="content">
+      {{ content }}
+
+      <footer class="content-footer">
+        <p>This project is maintained by <a href="https://github.com/unq0de">unq0de</a></p>
+        <p><small>Hosted on GitHub Pages</small></p>
+      </footer>
+    </main>
+
+  </div>
+</body>
+</html>
