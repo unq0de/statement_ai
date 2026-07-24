@@ -1,18 +1,19 @@
-# Statement AI — Documentation
-
-> For installation basics see the [Quickstart in the README](README.md#quickstart). This page covers everything else: features, configuration, Supabase setup, GDPR details, and the full API reference.
-
-<p>
-  <a href="#features">Features</a> ·
-  <a href="#tech-stack">Tech Stack</a> ·
-  <a href="#getting-started">Getting Started</a> ·
-  <a href="#using-supabase-instead-of-the-local-postgres-container">Using Supabase</a> ·
-  <a href="#privacy--gdpr">Privacy &amp; GDPR</a> ·
-  <a href="#api-reference">API Reference</a> ·
-  <a href="#project-structure">Structure</a>
-</p>
-
 ---
+title: Documentation
+description: Technical reference for Statement AI — configuration, Supabase setup, GDPR controls, and the full API reference.
+---
+<div class="letterhead">
+  <p class="letterhead-eyebrow">
+    <span>Statement AI</span>
+    <span>Doc. Ref. API-2026</span>
+    <span>Self-Hosted REST API</span>
+  </p>
+  <h1>Documentation</h1>
+  <p class="lede">Configuration, Supabase setup, GDPR controls, and the full API reference for running Statement AI yourself.</p>
+  <p class="letterhead-crumbs">For installation basics, see the <a href="../README.md">Quickstart in the README</a>.</p>
+</div>
+
+<div class="content" markdown="1">
 
 ## Features
 
@@ -281,18 +282,18 @@ Once the access token expires, use the [refresh endpoint](#5-refresh-token) to o
 
 | Method | Path | Auth Required | Description |
 |---|---|---|---|
-| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/register/` | No | Register a new user |
-| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/login/` | No | Obtain access & refresh tokens |
-| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/refresh/` | No (refresh token required) | Obtain a new access token |
-| ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
-| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/auth/export/` | Yes | Export all personal data as JSON |
-| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/` | Yes | List your own bank statements |
-| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
-| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
-| ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
-| ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
-| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
-| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/transactions/` | Yes | List your own transactions |
+| <span class="pill pill-post">POST</span> | `/api/auth/register/` | No | Register a new user |
+| <span class="pill pill-post">POST</span> | `/api/auth/login/` | No | Obtain access & refresh tokens |
+| <span class="pill pill-post">POST</span> | `/api/auth/refresh/` | No (refresh token required) | Obtain a new access token |
+| <span class="pill pill-delete">DELETE</span> | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
+| <span class="pill pill-get">GET</span> | `/api/auth/export/` | Yes | Export all personal data as JSON |
+| <span class="pill pill-get">GET</span> | `/api/statements/` | Yes | List your own bank statements |
+| <span class="pill pill-post">POST</span> | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
+| <span class="pill pill-get">GET</span> | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
+| <span class="pill pill-delete">DELETE</span> | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
+| <span class="pill pill-delete">DELETE</span> | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
+| <span class="pill pill-get">GET</span> | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
+| <span class="pill pill-get">GET</span> | `/api/transactions/` | Yes | List your own transactions |
 
 <a id="3-register-a-user"></a>
 <details>
@@ -722,7 +723,25 @@ Permanently deletes the authenticated user's account, including all bank stateme
 | `description` | string | Short description of the booking (in English) |
 | `amount` | string (decimal) | Amount. **Negative** = outgoing payment, **positive** = incoming payment |
 | `transaction_type` | string (enum) | One of: `INCOME`, `TRANSFER_OUT`, `TRANSFER_IN`, `DIRECT_DEBIT`, `STANDING_ORDER`, `CARD_PAYMENT`, `ATM_WITHDRAWAL`, `FEE_CHARGE` |
-| `category` | string (enum) | One of: `Housing & Utilities`, `Groceries & Food`, `Dining Out & Cafes`, `Transportation`, `Shopping & Retail`, `Subscriptions & Media`, `Health & Medical`, `Financial & Insurance`, `Salary & Main Income`, `Secondary Income`, `Transfers & P2P`, `Education & Childcare`, `Travel & Vacations`, `Cash & ATM`, `Miscellaneous & Other` |
+| `category` | string (enum) | One of the 15 categories below |
+
+<div class="chips">
+  <span class="chip">Housing &amp; Utilities</span>
+  <span class="chip">Groceries &amp; Food</span>
+  <span class="chip">Dining Out &amp; Cafes</span>
+  <span class="chip">Transportation</span>
+  <span class="chip">Shopping &amp; Retail</span>
+  <span class="chip">Subscriptions &amp; Media</span>
+  <span class="chip">Health &amp; Medical</span>
+  <span class="chip">Financial &amp; Insurance</span>
+  <span class="chip">Salary &amp; Main Income</span>
+  <span class="chip">Secondary Income</span>
+  <span class="chip">Transfers &amp; P2P</span>
+  <span class="chip">Education &amp; Childcare</span>
+  <span class="chip">Travel &amp; Vacations</span>
+  <span class="chip">Cash &amp; ATM</span>
+  <span class="chip">Miscellaneous &amp; Other</span>
+</div>
 
 > All AI-generated text (`description`, `ai_evaluation`) is always in **English**, regardless of the language of the original PDF.
 
@@ -752,7 +771,7 @@ Errors are returned consistently as a JSON object with an `error` field (excepti
 </details>
 
 <a id="17-typical-flow-end-to-end-example"></a>
-<details>
+<details open>
 <summary><b>17. Typical Flow (End-to-End Example)</b></summary>
 
 **1. Register**
@@ -885,3 +904,5 @@ statement_ai/
 ├── LICENSE                        # MIT License
 └── requirements.txt
 ```
+-e 
+</div>
