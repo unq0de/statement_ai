@@ -1,9 +1,10 @@
 ---
 title: Using Supabase
-layout: default
+permalink: /supabase/
 ---
 
 # Using Supabase Instead of the Local Postgres Container
+{: #using-supabase }
 
 Supabase is a hosted **PostgreSQL** database. This project already talks to Postgres via Django's `psycopg2` backend, so pointing it at Supabase is just a matter of changing connection settings:
 
@@ -11,7 +12,10 @@ Supabase is a hosted **PostgreSQL** database. This project already talks to Post
 - No different driver
 - No REST API involved
 
-## 1. Create the Supabase Project *(manual, one-time)*
+## 1. Create the Supabase Project
+{: #create-the-supabase-project }
+
+*(manual, one-time)*
 
 1. Go to [supabase.com](https://supabase.com) → **New project** → pick a name, region, and a database password.
 2. Go to **Project Settings → Database → Connection parameters** and note the `Host`, `Port`, `Database name` (`postgres` by default), `User`, and your password.
@@ -21,6 +25,7 @@ Supabase is a hosted **PostgreSQL** database. This project already talks to Post
 > ℹ️ **Note:** The Supabase **project** must be created manually in the dashboard — there's no "create project" API call to run from app code. Everything *inside* it (tables, columns, indexes) is created automatically in step 3.
 
 ## 2. Configure Environment Variables
+{: #configure-environment-variables }
 
 Add the following to your `.env`:
 
@@ -35,6 +40,7 @@ SUPABASE_DB_SSLMODE=require
 ```
 
 ## 3. Create the Schema
+{: #create-the-schema }
 
 You do **not** need to create tables manually in the Supabase SQL editor. The existing Django migrations create the exact same schema automatically — `BankStatement`, `Transaction`, plus Django's own `auth_user`, `django_session`, and so on.
 
@@ -60,13 +66,17 @@ docker compose exec web python manage.py createsuperuser
 
 That's it — zero changes needed to `models.py`, `views.py`, or `serializers.py`.
 
-## How Access Works *(no REST API needed for the database)*
+## How Access Works
+{: #how-access-works }
+
+*(no REST API needed for the database)*
 
 - Django connects to Supabase's Postgres **directly over the Postgres wire protocol** via `psycopg2` (already in `requirements.txt`) — the same way it talks to the local container today. This is the correct way to use Supabase from a Django backend.
 - Supabase's REST/GraphQL API (PostgREST) and the `supabase-py` SDK are a *different, optional* layer meant for client-side apps without their own backend. Since Django already **is** the backend and owns the schema via migrations, neither is needed for database access.
 - `supabase-py` only becomes relevant if you later want other Supabase services from this backend — for example, Supabase Storage for the PDF files.
 
 ## Is Supabase Worth It Here, or Better to Self-Host on GCP/AWS?
+{: #supabase-vs-self-hosted }
 
 Both connect the same way (plain Postgres), so this is an ops/hosting tradeoff, not a code one:
 
@@ -87,4 +97,8 @@ This project already has its own GDPR/retention logic (`delete_expired_data`), J
 
 > 💡 **Suggestion:** If you're not already committed to GCP/AWS for the rest of the stack, start with Supabase for the fastest path to a properly managed, backed-up Postgres. Since it's plain Postgres underneath, migrating later to Cloud SQL/RDS is a standard `pg_dump`/`pg_restore` — no Django code changes required.
 
-> ✅ **Tip:** All variables in the table above — including `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and the `POSTGRES_*` credentials — are forwarded from `.env` into the `web`, `cron`, and `db` containers via `docker-compose.yml`. Changing a value in `.env` and rebuilding is enough; you don't need to edit `docker-compose.yml` by hand.
+> ✅ **Tip:** All variables in the [environment variables table]({{ '/getting-started/' | relative_url }}#environment-variables) — including `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and the `POSTGRES_*` credentials — are forwarded from `.env` into the `web`, `cron`, and `db` containers via `docker-compose.yml`. Changing a value in `.env` and rebuilding is enough; you don't need to edit `docker-compose.yml` by hand.
+
+---
+
+Next: [Privacy & GDPR]({{ '/privacy-gdpr/' | relative_url }}) covers the data-protection measures around whichever database you choose.

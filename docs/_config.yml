@@ -1,46 +1,71 @@
-theme: jekyll-theme-minimal
+# ----------------------------------------------------------------------------
+# Site settings
+# ----------------------------------------------------------------------------
 title: Statement AI
-description: AI-powered REST API that extracts, categorizes and summarizes bank statement transactions from PDFs using Google Gemini and Django REST Framework.
+description: >-
+  Documentation for Statement AI — the AI-powered REST API that reads bank
+  statement PDFs, categorizes every transaction, and generates financial
+  summaries.
+tagline: Documentation
 
-# This site is served at the domain root (https://unq0de.github.io/), so no
-# baseurl prefix is needed. Only set this to "/repo-name" if you ever move
-# the docs to a project-page URL like https://<user>.github.io/<repo>/.
-baseurl: "/statement_ai"
+# TODO: replace with your own GitHub username/org.
+url: "https://unq0de.github.io"
+# NOTE: leave baseurl empty here. The GitHub Actions workflow
+# (.github/workflows/pages.yml) injects the correct project-pages base path
+# automatically at build time, and an empty baseurl is what you want for
+# `bundle exec jekyll serve` while developing locally.
+baseurl: ""
 
-# Pretty URLs: "/getting-started/" instead of "/getting-started.html"
-permalink: pretty
+repository: unq0de/statement-ai
+github_username: unq0de
 
-show_downloads: false
+# ----------------------------------------------------------------------------
+# Theme
+# ----------------------------------------------------------------------------
+theme: minima
+minima:
+  skin: classic
+  # We ship our own sidebar navigation, so the default Minima header
+  # link list stays empty on purpose.
+  header_pages: []
+  social_links: []
 
-# Single source of truth for the sidebar navigation.
-# Add/remove/reorder pages here — the layout renders this list automatically
-# and highlights whichever page is currently active.
-nav:
-  - title: Home
-    url: /
-  - title: Getting Started
-    url: /getting-started/
-  - title: Features & Tech Stack
-    url: /features/
-  - title: Using Supabase
-    url: /supabase/
-  - title: Privacy & GDPR
-    url: /privacy-gdpr/
-  - title: API Reference
-    url: /api-reference/
-  - title: Project Structure
-    url: /project-structure/
-
-# NOTE: layout is set explicitly per-page (front matter) instead of via a
-# global "defaults" rule here. A site-wide default that also matches
-# assets/css/style.scss would make Jekyll try to run the stylesheet through
-# the HTML layout too, which silently breaks the CSS build. Keeping it
-# per-page avoids that trap entirely.
-
+# ----------------------------------------------------------------------------
+# Markdown / syntax highlighting
+# ----------------------------------------------------------------------------
 markdown: kramdown
 kramdown:
   input: GFM
   syntax_highlighter: rouge
+  auto_ids: true
+  hard_wrap: false
 
+# ----------------------------------------------------------------------------
+# Plugins (all part of the GitHub Pages allow-list)
+# ----------------------------------------------------------------------------
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+# ----------------------------------------------------------------------------
+# Every page in this site is a documentation page with the sidebar layout,
+# so we set it as the default instead of repeating it in every file.
+# ----------------------------------------------------------------------------
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: docs
+
+# ----------------------------------------------------------------------------
+# Build excludes
+# ----------------------------------------------------------------------------
 exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - node_modules
   - README.md
+
+permalink: pretty

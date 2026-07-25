@@ -1,386 +1,388 @@
 ---
 ---
 
-/* Custom layout: fixed left sidebar with page nav + scrollable content column.
-   Written standalone (not built on top of jekyll-theme-minimal's own CSS)
-   since the HTML structure in _layouts/default.html was replaced. */
+@import "minima";
 
+/* ==========================================================================
+   Theme tokens (light default, dark override via [data-theme="dark"])
+   ========================================================================== */
 :root {
-  --sidebar-width: 272px;
-  --content-max-width: 820px;
-
-  --border-color: #d8dee4;
-  --border-color-soft: #eaeef2;
-  --text-color: #1f2328;
-  --muted-color: #636c76;
-  --link-color: #0969da;
-  --link-hover: #0550ae;
-
-  --sidebar-bg: #fbfcfd;
-  --content-bg: #ffffff;
-  --active-bg: #ddf1ff;
-  --active-border: #218bff;
-  --code-bg: #f6f8fa;
-
-  --accent: #2f6feb;
-  --accent-soft: #eef4ff;
-
-  --shadow-sm: 0 1px 2px rgba(31, 35, 40, 0.06);
-  --shadow-md: 0 4px 16px rgba(31, 35, 40, 0.06);
-
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica,
-    Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas,
-    "Liberation Mono", Menlo, monospace;
+  --docs-bg: #ffffff;
+  --docs-bg-alt: #f6f8fa;
+  --docs-text: #1c1f24;
+  --docs-text-muted: #57606a;
+  --docs-border: #e2e5e9;
+  --docs-accent: #a1341f; /* matches Minima's default link/brand red */
+  --docs-accent-bg: rgba(161, 52, 31, 0.08);
+  --docs-code-bg: #f0f2f5;
+  --docs-sidebar-width: 280px;
+  --docs-toc-width: 220px;
 }
 
-* {
-  box-sizing: border-box;
+html[data-theme="dark"] {
+  --docs-bg: #14171a;
+  --docs-bg-alt: #1b1f23;
+  --docs-text: #e6e9ec;
+  --docs-text-muted: #9aa4ae;
+  --docs-border: #2a2f34;
+  --docs-accent: #ff8a70;
+  --docs-accent-bg: rgba(255, 138, 112, 0.12);
+  --docs-code-bg: #20242a;
 }
 
-html {
-  scroll-behavior: smooth;
+html[data-theme="dark"] body {
+  background-color: var(--docs-bg);
+  color: var(--docs-text);
 }
 
-body {
-  margin: 0;
-  font-family: var(--font-sans);
-  color: var(--text-color);
-  background: var(--content-bg);
-  line-height: 1.65;
-  -webkit-font-smoothing: antialiased;
+html[data-theme="dark"] .site-header,
+html[data-theme="dark"] .site-footer {
+  background-color: var(--docs-bg);
+  border-color: var(--docs-border);
 }
 
-a {
-  color: var(--link-color);
-  text-decoration: none;
-}
-a:hover {
-  color: var(--link-hover);
-  text-decoration: underline;
+html[data-theme="dark"] .site-title,
+html[data-theme="dark"] .site-nav .page-link {
+  color: var(--docs-text) !important;
 }
 
-.page-wrapper {
+html[data-theme="dark"] a {
+  color: var(--docs-accent);
+}
+
+html[data-theme="dark"] code,
+html[data-theme="dark"] pre {
+  background-color: var(--docs-code-bg) !important;
+  color: var(--docs-text);
+}
+
+html[data-theme="dark"] table th,
+html[data-theme="dark"] table td {
+  border-color: var(--docs-border) !important;
+}
+
+html[data-theme="dark"] table tr:nth-child(2n) {
+  background-color: var(--docs-bg-alt) !important;
+}
+
+/* Widen only the content area used by our docs shell, leave Minima's
+   header/footer wrapper (used elsewhere) at their normal blog width. */
+.page-content > .wrapper {
+  max-width: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* ==========================================================================
+   Layout shell
+   ========================================================================== */
+.docs-shell {
   display: flex;
   align-items: flex-start;
-  min-height: 100vh;
+  min-height: calc(100vh - 200px);
 }
 
-/* ---------- Sidebar ---------- */
-
-.sidebar {
-  width: var(--sidebar-width);
-  flex-shrink: 0;
+/* ---- Sidebar ---- */
+.docs-sidebar {
+  flex: 0 0 var(--docs-sidebar-width);
+  width: var(--docs-sidebar-width);
+  border-right: 1px solid var(--docs-border);
+  background: var(--docs-bg-alt);
   position: sticky;
   top: 0;
+  align-self: flex-start;
   height: 100vh;
   overflow-y: auto;
-  background: var(--sidebar-bg);
-  border-right: 1px solid var(--border-color);
-  padding: 28px 22px;
 }
 
-.sidebar-header {
-  margin-bottom: 22px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--border-color);
+.docs-sidebar-inner {
+  padding: 24px 20px 32px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
-.sidebar-kicker {
-  display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-  background: var(--accent-soft);
-  padding: 3px 8px;
-  border-radius: 5px;
-  margin-bottom: 10px;
-}
-
-.sidebar-title {
-  display: block;
-  font-size: 1.32rem;
-  font-weight: 800;
-  color: var(--text-color);
-  letter-spacing: -0.01em;
-}
-.sidebar-title:hover {
-  color: var(--link-color);
+.docs-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 18px;
   text-decoration: none;
 }
 
-.sidebar-description {
-  margin: 8px 0 0;
-  font-size: 0.86rem;
-  color: var(--muted-color);
-  line-height: 1.5;
+.docs-brand strong {
+  font-size: 1.15rem;
+  color: var(--docs-text);
 }
 
-.sidebar-nav-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+.docs-brand span {
+  font-size: 0.8rem;
+  color: var(--docs-text-muted);
   text-transform: uppercase;
-  color: var(--muted-color);
-  margin: 0 0 8px 10px;
+  letter-spacing: 0.04em;
 }
 
-.sidebar-nav {
+.docs-search {
+  margin-bottom: 18px;
+}
+
+.docs-search input[type="search"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--docs-border);
+  border-radius: 6px;
+  background: var(--docs-bg);
+  color: var(--docs-text);
+  font-size: 0.9rem;
+}
+
+.docs-search input[type="search"]:focus {
+  outline: 2px solid var(--docs-accent);
+  outline-offset: 1px;
+}
+
+.docs-search-empty {
+  margin: 8px 2px 0;
+  font-size: 0.8rem;
+  color: var(--docs-text-muted);
+}
+
+.docs-nav {
+  flex: 1;
+}
+
+.docs-nav-group {
+  margin-bottom: 18px;
+}
+
+.docs-nav-group-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--docs-text-muted);
+  margin: 0 0 6px 2px;
+}
+
+.docs-nav ul {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.sidebar-nav li {
-  margin: 1px 0;
+.docs-nav li {
+  margin: 0;
 }
 
-.sidebar-nav a {
+.docs-nav a {
   display: block;
-  position: relative;
-  padding: 8px 12px 8px 14px;
-  border-radius: 7px;
-  color: var(--text-color);
-  font-size: 0.93rem;
-  font-weight: 500;
-  border-left: 3px solid transparent;
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.sidebar-nav a:hover {
-  background: var(--border-color-soft);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.92rem;
+  color: var(--docs-text);
   text-decoration: none;
+  line-height: 1.3;
 }
 
-.sidebar-nav li.active a {
-  background: var(--active-bg);
-  color: var(--link-hover);
-  font-weight: 700;
-  border-left-color: var(--active-border);
+.docs-nav a:hover {
+  background: var(--docs-accent-bg);
 }
 
-.sidebar-footer {
-  margin-top: 22px;
+.docs-nav a.active {
+  background: var(--docs-accent-bg);
+  color: var(--docs-accent);
+  font-weight: 600;
+}
+
+.docs-nav li.docs-nav-hidden {
+  display: none;
+}
+
+.docs-sidebar-footer {
+  border-top: 1px solid var(--docs-border);
+  margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid var(--border-color);
-  font-size: 0.85rem;
-}
-
-.sidebar-footer a {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-}
-
-/* ---------- Mobile nav toggle (checkbox hack, no JS needed) ---------- */
-
-.nav-toggle {
-  display: none;
-}
-
-.nav-toggle-label {
-  display: none;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  cursor: pointer;
-  padding: 14px 20px;
-  font-weight: 600;
-  font-size: 0.95rem;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--sidebar-bg);
 }
 
-.nav-toggle-label .burger {
-  width: 18px;
-  height: 12px;
-  position: relative;
-  flex-shrink: 0;
+.docs-theme-toggle,
+.docs-github-link {
+  font-size: 0.85rem;
+  border: 1px solid var(--docs-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--docs-bg);
+  color: var(--docs-text);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
 }
-.nav-toggle-label .burger span,
-.nav-toggle-label .burger::before,
-.nav-toggle-label .burger::after {
-  content: "";
-  position: absolute;
-  left: 0;
+
+.docs-theme-toggle:hover,
+.docs-github-link:hover {
+  border-color: var(--docs-accent);
+}
+
+.docs-sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 40;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--docs-border);
+  background: var(--docs-bg);
+  cursor: pointer;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.docs-sidebar-toggle span {
+  display: block;
   width: 18px;
   height: 2px;
-  border-radius: 1px;
-  background: var(--text-color);
+  background: var(--docs-text);
 }
-.nav-toggle-label .burger span { top: 5px; }
-.nav-toggle-label .burger::before { top: 0; }
-.nav-toggle-label .burger::after { top: 10px; }
 
-/* ---------- Content ---------- */
+.docs-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 30;
+}
 
-.content {
+/* ---- Main content + right-hand TOC ---- */
+.docs-main {
   flex: 1;
   min-width: 0;
-  max-width: var(--content-max-width);
-  margin: 0 auto;
-  padding: 56px 40px 64px;
+  display: flex;
+  gap: 32px;
+  padding: 32px 40px 64px;
+  align-items: flex-start;
 }
 
-.content > h1:first-child {
+.docs-content {
+  flex: 1;
+  min-width: 0;
+  max-width: 760px;
+}
+
+.docs-content h1:first-child {
   margin-top: 0;
-  font-size: 2rem;
-  letter-spacing: -0.02em;
 }
 
-.content h1, .content h2, .content h3,
-.content h4, .content h5, .content h6 {
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  scroll-margin-top: 24px;
-}
-
-.content h1 {
-  padding-bottom: 0.4em;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.content h2 {
-  margin-top: 2.4em;
-  padding-bottom: 0.35em;
-  border-bottom: 1px solid var(--border-color);
-  font-size: 1.4rem;
-}
-
-.content h3 {
-  margin-top: 1.8em;
-  font-size: 1.15rem;
-  color: var(--text-color);
-}
-
-.content p, .content li {
-  color: #2b3138;
-}
-
-.content hr {
-  border: none;
-  border-top: 1px solid var(--border-color);
-  margin: 2.5em 0;
-}
-
-.content img {
+.docs-content table {
+  display: block;
+  overflow-x: auto;
   max-width: 100%;
 }
 
-.content pre, .content code {
-  font-family: var(--font-mono);
-  background-color: var(--code-bg);
-  border-radius: 6px;
-}
-.content pre {
-  border: 1px solid var(--border-color);
-  padding: 14px 16px;
-  overflow-x: auto;
-  font-size: 0.85rem;
-  line-height: 1.55;
-}
-.content code {
-  padding: 0.2em 0.45em;
-  font-size: 0.85em;
-}
-.content pre code {
-  padding: 0;
-  background: none;
-  border-radius: 0;
+.docs-toc {
+  flex: 0 0 var(--docs-toc-width);
+  width: var(--docs-toc-width);
+  position: sticky;
+  top: 32px;
 }
 
-.content table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 1em 0 1.6em;
-  font-size: 0.92rem;
-  box-shadow: var(--shadow-sm);
-  border-radius: 8px;
-  overflow: hidden;
-}
-.content table th {
-  background: var(--code-bg);
+.docs-toc-title {
+  font-size: 0.72rem;
   font-weight: 700;
-  text-align: left;
-}
-.content table th, .content table td {
-  border: 1px solid var(--border-color);
-  padding: 8px 14px;
-}
-.content table tr:nth-child(2n) {
-  background-color: #fafbfc;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--docs-text-muted);
+  margin: 0 0 8px;
 }
 
-.content blockquote {
-  border-left: 4px solid var(--accent);
-  background: var(--accent-soft);
-  color: #2b3138;
-  padding: 0.8em 1.1em;
-  margin: 1.4em 0;
-  border-radius: 0 8px 8px 0;
-}
-.content blockquote p:last-child {
-  margin-bottom: 0;
+.docs-toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 2px solid var(--docs-border);
 }
 
-.content details {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 10px 16px;
-  margin: 10px 0;
-  background: #fff;
-  box-shadow: var(--shadow-sm);
+.docs-toc li a {
+  display: block;
+  padding: 4px 0 4px 12px;
+  font-size: 0.83rem;
+  color: var(--docs-text-muted);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  margin-left: -2px;
 }
-.content details summary {
-  cursor: pointer;
+
+.docs-toc li.docs-toc-h3 a {
+  padding-left: 24px;
+}
+
+.docs-toc li a:hover {
+  color: var(--docs-text);
+}
+
+.docs-toc li a.active {
+  color: var(--docs-accent);
+  border-left-color: var(--docs-accent);
   font-weight: 600;
-  padding: 4px 0;
-}
-.content details[open] summary {
-  border-bottom: 1px solid var(--border-color-soft);
-  margin-bottom: 10px;
 }
 
-.content-footer {
-  margin-top: 56px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border-color);
-  color: var(--muted-color);
-  font-size: 0.85rem;
+.docs-toc:empty {
+  display: none;
 }
 
-/* ---------- Responsive: collapse sidebar below the content on small screens ---------- */
-
-@media (max-width: 860px) {
-  .page-wrapper {
-    flex-direction: column;
+/* ==========================================================================
+   Responsive behaviour
+   ========================================================================== */
+@media screen and (max-width: $on-laptop) {
+  .docs-toc {
+    display: none;
   }
 
-  .nav-toggle-label {
+  .docs-main {
+    padding: 32px;
+  }
+}
+
+@media screen and (max-width: $on-palm) {
+  .docs-sidebar-toggle {
     display: flex;
   }
 
-  .sidebar {
-    position: static;
-    width: 100%;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-    display: none;
-    box-shadow: var(--shadow-md);
-  }
-
-  .nav-toggle:checked ~ .page-wrapper .sidebar {
+  .docs-shell {
     display: block;
   }
 
-  .content {
-    padding: 32px 20px 48px;
+  .docs-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 35;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
   }
 
-  .content > h1:first-child {
-    font-size: 1.6rem;
+  .docs-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .docs-sidebar-backdrop.is-open {
+    display: block;
+  }
+
+  .docs-main {
+    padding: 72px 20px 48px;
+    display: block;
+  }
+
+  .docs-content {
+    max-width: none;
   }
 }

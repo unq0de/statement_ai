@@ -1,16 +1,21 @@
 ---
 title: Getting Started
-layout: default
+permalink: /getting-started/
 ---
 
 # Getting Started
+{: #getting-started }
+
+If you just want the shortest path to a running instance, use the **Quickstart** section in the project's [README on GitHub](https://github.com/{{ site.repository | default: "your-username/statement-ai" }}#quickstart). This page goes a bit further: full prerequisites, every environment variable, and how the scheduled data-retention cleanup works.
 
 ## Prerequisites
+{: #prerequisites }
 
 - Docker & Docker Compose
 - A [Google Gemini API key](https://aistudio.google.com/apikey)
 
 ## Installation
+{: #installation }
 
 **1. Clone and configure**
 
@@ -40,6 +45,7 @@ sudo docker compose exec web python manage.py migrate
 The API is then available at `http://localhost:8000/api/`.
 
 ## Environment Variables
+{: #environment-variables }
 
 | Variable | Description | Example |
 |---|---|---|
@@ -50,7 +56,7 @@ The API is then available at `http://localhost:8000/api/`.
 | `POSTGRES_DB` | Database name (only used if `DB_ENGINE=local`) | `statement_ai_db` |
 | `POSTGRES_USER` | Database user (only used if `DB_ENGINE=local`) | `statement_ai_user` |
 | `POSTGRES_PASSWORD` | Database password (only used if `DB_ENGINE=local`) | `********` |
-| `SUPABASE_DB_HOST` | Supabase Postgres host (only used if `DB_ENGINE=supabase`) — direct or pooler host, see [Using Supabase]({{ site.baseurl }}/supabase/) | `db.xxxxxxxxxxxx.supabase.co` |
+| `SUPABASE_DB_HOST` | Supabase Postgres host (only used if `DB_ENGINE=supabase`) — direct or pooler host, see [Using Supabase]({{ '/supabase/' | relative_url }}) | `db.xxxxxxxxxxxx.supabase.co` |
 | `SUPABASE_DB_PORT` | Supabase Postgres port (only used if `DB_ENGINE=supabase`) — `5432` direct, `6543` if using the pooler | `5432` |
 | `SUPABASE_DB_NAME` | Supabase database name (only used if `DB_ENGINE=supabase`) | `postgres` |
 | `SUPABASE_DB_USER` | Supabase database user (only used if `DB_ENGINE=supabase`) | `postgres` |
@@ -63,6 +69,7 @@ The API is then available at `http://localhost:8000/api/`.
 > ⚠️ **Warning:** Never commit your `.env` file. Rotate `SECRET_KEY` and `GEMINI_API_KEY` immediately if they are ever exposed.
 
 ## Scheduled Data Retention Cleanup
+{: #scheduled-data-retention-cleanup }
 
 Bank statements older than `DATA_RETENTION_DAYS` are cleaned up automatically by a dedicated `cron` service in `docker-compose.yml`. It runs the same image as `web`, but only executes `manage.py delete_expired_data` on a daily schedule (`cron/statement-ai-cron`, default `03:00`) and otherwise stays idle.
 
@@ -87,3 +94,7 @@ sudo docker compose exec cron python manage.py delete_expired_data
 This permanently deletes every bank statement (and its transactions and PDF file) whose `uploaded_at` is older than the configured retention period. To change the schedule, edit `cron/statement-ai-cron` and rebuild the `cron` service.
 
 > ℹ️ **Note:** If you'd rather not run the sidecar container, remove the `cron` service from `docker-compose.yml` and schedule `docker compose exec web python manage.py delete_expired_data` via the host's system cron instead.
+
+---
+
+Next: [Using Supabase]({{ '/supabase/' | relative_url }}) if you'd rather use a hosted database, or jump to the [API Reference]({{ '/api-reference/' | relative_url }}) once your instance is running.

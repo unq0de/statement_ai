@@ -1,9 +1,10 @@
 ---
 title: Project Structure
-layout: default
+permalink: /project-structure/
 ---
 
 # Project Structure
+{: #project-structure }
 
 ```
 statement_ai/
@@ -27,10 +28,11 @@ statement_ai/
 ├── cron/
 │   ├── entrypoint.sh              # Cron sidecar entrypoint
 │   └── statement-ai-cron          # Crontab: daily retention cleanup schedule
+├── docs/                          # This documentation site (Jekyll + Minima)
 ├── .github/
 │   └── workflows/
-│       └── codacy.yml             # Codacy security scan CI workflow
-├── docs/                         # This documentation site (GitHub Pages, Minimal theme)
+│       ├── codacy.yml              # Codacy security scan CI workflow
+│       └── pages.yml               # Builds & deploys this docs site to GitHub Pages
 ├── manage.py                     # Django management CLI
 ├── .env.example                   # Template for required environment variables
 ├── .gitignore
@@ -39,3 +41,10 @@ statement_ai/
 ├── LICENSE                        # MIT License
 └── requirements.txt
 ```
+
+## License
+{: #license }
+
+This project is licensed under the [MIT License](https://github.com/{{ site.repository | default: "your-username/statement-ai" }}/blob/main/LICENSE).
+
+**⭐ If you like Statement AI, consider giving the repo a star!**

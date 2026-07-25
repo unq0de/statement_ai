@@ -1,0 +1,42 @@
+- title: Overview
+  items:
+    - title: Introduction
+      url: /
+    - title: Features
+      url: /features/
+    - title: Tech Stack
+      url: /tech-stack/
+
+- title: Setup
+  items:
+    - title: Getting Started
+      url: /getting-started/
+    - title: Using Supabase
+      url: /supabase/
+
+- title: Security & Compliance
+  items:
+    - title: Privacy & GDPR
+      url: /privacy-gdpr/
+
+- title: API Reference
+  items:
+    - title: Overview & Authentication
+      url: /api-reference/
+    - title: Bank Statements
+      url: /api-reference/statements/
+    - title: Transactions
+      url: /api-reference/transactions/
+    - title: Account & Personal Data
+      url: /api-reference/account/
+    - title: Data Models
+      url: /data-models/
+    - title: Error Format
+      url: /api-reference/errors/
+    - title: End-to-End Example
+      url: /api-reference/example-flow/
+
+- title: Project
+  items:
+    - title: Project Structure
+      url: /project-structure/
