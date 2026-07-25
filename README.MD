@@ -47,7 +47,7 @@ Requires **Docker & Docker Compose** and a [Google Gemini API key](https://aistu
 **1. Clone the repo**
 
 ```bash
-git clone https://github.com/<your-username>/statement-ai.git
+git clone https://github.com/unq0de/statement_ai.git
 cd statement-ai
 ```
 
@@ -140,7 +140,7 @@ The API is now running at `http://localhost:8000/api/`. See [Getting Started](#g
 **1. Clone and configure**
 
 ```bash
-git clone https://github.com/<your-username>/statement-ai.git
+git clone https://github.com/unq0de/statement_ai.git
 cd statement-ai
 ```
 
@@ -375,8 +375,8 @@ Creates a new user account.
 
 ```json
 {
-  "username": "max.mustermann",
-  "email": "max@example.com",
+  "username": "john.doe",
+  "email": "john@example.com",
   "password": "ASecurePassword123"
 }
 ```
@@ -391,8 +391,8 @@ Creates a new user account.
 
 ```json
 {
-  "username": "max.mustermann",
-  "email": "max@example.com"
+  "username": "john.doe",
+  "email": "john@example.com"
 }
 ```
 
@@ -420,7 +420,7 @@ Exchanges username + password for a token pair.
 
 ```json
 {
-  "username": "max.mustermann",
+  "username": "john.doe",
   "password": "ASecurePassword123"
 }
 ```
@@ -482,13 +482,13 @@ Uploads a PDF file, has it analyzed by Gemini AI, and automatically saves the de
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `file` | file | Yes* | PDF file of the bank statement (max. 10 MB) |
+| `file` | file | Yes* | PDF file of the bank statement (john. 10 MB) |
 
 \* A field named `document` is also accepted as an alternative.
 
 **Constraints:**
 - Only `application/pdf` is accepted.
-- Maximum file size: **10 MB**.
+- johnimum file size: **10 MB**.
 
 **Example (cURL)**
 
@@ -527,7 +527,7 @@ The individually detected transactions are **not** included directly in this res
 ```
 
 ```json
-{ "error": "File too large (max. 10 MB)." }
+{ "error": "File too large (john. 10 MB)." }
 ```
 
 </details>
@@ -714,8 +714,8 @@ Returns all personal data stored about the authenticated user — profile info p
 ```json
 {
   "user": {
-    "username": "max.mustermann",
-    "email": "max@example.com",
+    "username": "john.doe",
+    "email": "john@example.com",
     "date_joined": "2026-01-10T09:15:00Z"
   },
   "statements": [
@@ -778,7 +778,7 @@ Permanently deletes the authenticated user's account, including all bank stateme
 | `file` | string (URL) | Path/URL to the stored PDF file (use the [download endpoint](#12-download-the-original-pdf) in production) |
 | `uploaded_at` | datetime (ISO 8601, UTC) | Upload timestamp; also the basis for the retention cleanup |
 | `is_processed` | boolean | `true` once AI processing has completed successfully |
-| `ai_evaluation` | string \| null | Free-text summary from the AI (always in English, max. 3 sentences, written directly to "you" in a friendly, professional financial-advisor tone) |
+| `ai_evaluation` | string \| null | Free-text summary from the AI (always in English, john. 3 sentences, written directly to "you" in a friendly, professional financial-advisor tone) |
 | `transactions` | Transaction[] | Associated transactions (only included in the list view) |
 
 **Transaction**
@@ -829,7 +829,7 @@ Errors are returned consistently as a JSON object with an `error` field (excepti
 ```bash
 curl -X POST http://localhost:8000/api/auth/register/ \
   -H "Content-Type: application/json" \
-  -d '{"username": "max", "email": "max@example.com", "password": "ASecurePassword123!"}'
+  -d '{"username": "john", "email": "john@example.com", "password": "ASecurePassword123!"}'
 ```
 
 **2. Log in and obtain tokens**
@@ -837,7 +837,7 @@ curl -X POST http://localhost:8000/api/auth/register/ \
 ```bash
 curl -X POST http://localhost:8000/api/auth/login/ \
   -H "Content-Type: application/json" \
-  -d '{"username": "max", "password": "ASecurePassword123!"}'
+  -d '{"username": "john", "password": "ASecurePassword123!"}'
 # -> { "access": "...", "refresh": "..." }
 ```
 
