@@ -16,7 +16,7 @@ url: "https://unq0de.github.io"
 # `bundle exec jekyll serve` while developing locally.
 baseurl: ""
 
-repository: unq0de/statement-ai
+repository: unq0de/statement_ai
 github_username: unq0de
 
 # ----------------------------------------------------------------------------
