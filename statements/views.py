@@ -23,6 +23,28 @@ logger = logging.getLogger(__name__)
 
 MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 
+
+def _is_valid_pdf_file(file_obj):
+    if file_obj is None:
+        return False
+
+    file_name = (file_obj.name or '').lower()
+    if not file_name.endswith('.pdf'):
+        # Some clients send no extension even for valid PDFs. Fall back to a
+        # file-signature check to avoid trusting only the filename.
+        pass
+
+    sample = file_obj.read(4096)
+    file_obj.seek(0)
+    if not sample:
+        return False
+
+    if sample.startswith(b'%PDF'):
+        return True
+
+    return file_name.endswith('.pdf') and b'%PDF' in sample[:2048]
+
+
 # ------------------------------------------------------------------
 # Views
 # ------------------------------------------------------------------
@@ -62,9 +84,16 @@ class StatementUploadView(generics.CreateAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if file_obj.content_type != "application/pdf":
+        content_type = (file_obj.content_type or '').split(';', 1)[0].strip().lower()
+        if content_type not in {"application/pdf", "application/octet-stream", "binary/octet-stream"}:
             return Response(
                 {"error": "Only PDF files are allowed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not _is_valid_pdf_file(file_obj):
+            return Response(
+                {"error": "Uploaded file is not a valid PDF."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

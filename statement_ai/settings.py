@@ -119,8 +119,8 @@ else:
             'NAME': os.environ.get('POSTGRES_DB', 'statement_ai_db'),
             'USER': os.environ.get('POSTGRES_USER', 'statement_ai_user'),
             'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'statement_ai_password'),
-            'HOST': 'db',
-            'PORT': '5432',
+            'HOST': os.environ.get('POSTGRES_HOST', 'db'),
+            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
         }
     }
 

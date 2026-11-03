@@ -79,7 +79,7 @@ docker compose exec web python manage.py migrate
 docker compose exec web python manage.py createsuperuser
 ```
 
-The API is now running at `http://localhost:8000/api/`. See [Getting Started](#getting-started) below for details, or [Using Supabase](#using-supabase-instead-of-the-local-postgres-container) if you'd rather use a hosted database instead of the local Postgres container.
+The API is now running at `http://localhost:8001/api/` (port `8000` is reserved by other local services on some hosts). See [Getting Started](#getting-started) below for details, or [Using Supabase](#using-supabase-instead-of-the-local-postgres-container) if you'd rather use a hosted database instead of the local Postgres container.
 
 ---
 
@@ -162,7 +162,7 @@ sudo docker compose up -d --build
 sudo docker compose exec web python manage.py migrate
 ```
 
-The API is then available at `http://localhost:8000/api/`.
+The API is then available at `http://localhost:8001/api/`.
 
 ### Environment Variables
 
@@ -172,6 +172,8 @@ The API is then available at `http://localhost:8000/api/`.
 | `DEBUG` | `1` for development, `0` for production | `0` |
 | `GEMINI_API_KEY` | Your Google Gemini API key | `AI...` |
 | `DB_ENGINE` | `local` (default, docker Postgres) or `supabase` | `supabase` |
+| `POSTGRES_HOST` | PostgreSQL host (only used if `DB_ENGINE=local`) | `localhost` or `db` |
+| `POSTGRES_PORT` | PostgreSQL port (only used if `DB_ENGINE=local`) | `5432` |
 | `POSTGRES_DB` | Database name (only used if `DB_ENGINE=local`) | `statement_ai_db` |
 | `POSTGRES_USER` | Database user (only used if `DB_ENGINE=local`) | `statement_ai_user` |
 | `POSTGRES_PASSWORD` | Database password (only used if `DB_ENGINE=local`) | `********` |

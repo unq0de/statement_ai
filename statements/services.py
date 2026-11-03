@@ -1,23 +1,34 @@
 import json
-import google.generativeai as genai
+
 from django.conf import settings
+
 from .models import BankStatement, Transaction
 
-# Gemini API konfigurieren
-genai.configure(api_key=settings.GEMINI_API_KEY)
+try:
+    from google import genai as google_genai
+except ImportError:  # pragma: no cover - dependency is optional for offline tests.
+    google_genai = None
+
+
+def _get_gemini_model():
+    if not settings.GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY is not configured.")
+
+    if google_genai is None:
+        raise RuntimeError("Google Gemini SDK is not installed.")
+
+    client = google_genai.Client(api_key=settings.GEMINI_API_KEY)
+    return client.models
 
 
 def process_pdf_statement_with_gemini(statement_instance):
-    """Liest das PDF eines Kontoauszugs per Gemini AI aus, kategorisiert alle Transaktionen
-
-    und speichert die Ergebnisse strikt auf Englisch in der Datenbank.
+    """Extracts transactions from a bank statement PDF with Gemini and stores the
+    results in English in the database.
     """
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = _get_gemini_model()
 
-    # PDF-Datei aus dem Django FileField lesen
     pdf_bytes = statement_instance.file.read()
 
-    # Prompt mit allen Vorgaben & Regeln
     prompt = """
     You are an expert financial AI data extractor. Analyze the attached bank statement PDF and return a JSON response.
 
@@ -72,13 +83,20 @@ def process_pdf_statement_with_gemini(statement_instance):
     Note for amount: Outgoing payments MUST be negative numbers (e.g. -12.50). Incoming payments MUST be positive numbers (e.g. 1500.00).
     """
 
-    # Aufruf an Gemini
-    response = model.generate_content(
-        [prompt, {"mime_type": "application/pdf", "data": pdf_bytes}]
-    )
+    try:
+        response = model.generate_content(
+            [prompt, {"mime_type": "application/pdf", "data": pdf_bytes}]
+        )
+    except TypeError:
+        response = model.generate_content(
+            model="gemini-2.5-flash",
+            contents=[prompt, {"mime_type": "application/pdf", "data": pdf_bytes}],
+        )
 
-    # Clean JSON Response
-    response_text = response.text.strip()
+    response_text = getattr(response, 'text', '')
+    if not response_text:
+        response_text = str(response)
+    response_text = response_text.strip()
     if response_text.startswith("```json"):
         response_text = response_text[7:]
     if response_text.startswith("```"):
@@ -88,12 +106,10 @@ def process_pdf_statement_with_gemini(statement_instance):
 
     data = json.loads(response_text.strip())
 
-    # 1. KI-Bewertung am Kontoauszug speichern
     statement_instance.ai_evaluation = data.get("ai_evaluation", "")
     statement_instance.is_processed = True
     statement_instance.save()
 
-    # 2. Transaktionen in der Datenbank anlegen
     transactions_data = data.get("transactions", [])
     for tx in transactions_data:
         Transaction.objects.create(
