@@ -40,6 +40,18 @@
 
 ---
 
+## Documentation
+
+The project documentation is published through the GitHub Pages site and is kept in the `docs/` directory.
+
+- [Documentation home](https://unq0de.github.io/statement_ai/)
+- [Getting started guide](https://unq0de.github.io/statement_ai/getting-started/)
+- [Installation guide](https://unq0de.github.io/statement_ai/installation/)
+- [Features overview](https://unq0de.github.io/statement_ai/features/)
+- [API reference](https://unq0de.github.io/statement_ai/api-reference/)
+- [Security and privacy](https://unq0de.github.io/statement_ai/security/)
+- [Troubleshooting](https://unq0de.github.io/statement_ai/troubleshooting/)
+
 ## Quickstart
 
 Requires **Docker & Docker Compose** and a [Google Gemini API key](https://aistudio.google.com/apikey).

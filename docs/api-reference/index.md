@@ -1,152 +1,137 @@
 ---
-title: API Reference — Overview & Authentication
+layout: page
+title: API Reference
 permalink: /api-reference/
 ---
 
 # API Reference
-{: #api-reference }
 
-**Base URL (local):** `http://localhost:8000/api/` &nbsp;|&nbsp; **Format:** JSON (exception: file upload as `multipart/form-data`) &nbsp;|&nbsp; **Authentication:** JWT (Bearer Token)
+This documentation reflects the current Django REST API in this repository. The local service runs on `http://localhost:8001/api/` by default when started with Docker Compose.
+
+## Base URL and format
+
+- Base URL: `http://localhost:8001/api/`
+- Format: JSON for most endpoints
+- File upload: `multipart/form-data`
+- Authentication: JWT bearer token
 
 ## Authentication
-{: #authentication }
 
-The API uses **JWT (JSON Web Tokens)** via [`djangorestframework-simplejwt`](https://django-rest-framework-simplejwt.readthedocs.io/).
+The application uses `djangorestframework-simplejwt` for authentication. After a successful login, the API returns an `access` token and a `refresh` token.
 
-After logging in, you receive an `access` and a `refresh` token. Send the `access` token with **every** request to a protected endpoint in the `Authorization` header:
+Send the `access` token in the `Authorization` header for every protected request:
 
-```
+```http
 Authorization: Bearer <access_token>
 ```
 
-| Token | Validity |
-|---|---|
-| Access Token | 60 minutes |
-| Refresh Token | 1 day |
+The default token lifetimes are:
 
-Once the access token expires, use the [refresh endpoint](#refresh-token) to obtain a new one without logging in again. All endpoints except registration and login require a valid access token — without one, the API responds with `401 Unauthorized`.
+| Token | Lifetime |
+| --- | --- |
+| Access token | 60 minutes |
+| Refresh token | 1 day |
 
-## Endpoints Overview
-{: #endpoints-overview }
+If the access token expires, use `POST /api/auth/refresh/` to create a new access token.
 
-| Method | Path | Auth Required | Description |
-|---|---|---|---|
-| `POST` | `/api/auth/register/` | No | Register a new user |
-| `POST` | `/api/auth/login/` | No | Obtain access & refresh tokens |
-| `POST` | `/api/auth/refresh/` | No (refresh token required) | Obtain a new access token |
-| `DELETE` | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
-| `GET` | `/api/auth/export/` | Yes | Export all personal data as JSON |
-| `GET` | `/api/statements/` | Yes | List your own bank statements |
-| `GET` | `/api/statements/<int:pk>/` | Yes | Retrieve a single bank statement including its transactions |
-| `POST` | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
-| `GET` | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
-| `DELETE` | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
-| `DELETE` | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
-| `GET` | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
-| `GET` | `/api/transactions/` | Yes | List your own transactions |
-| `GET` | `/api/transactions/<int:pk>/` | Yes | Retrieve a single transaction |
-| `GET` | `/api/analytics/` | Yes | Compatibility alias for statement analytics |
+## Endpoint overview
 
-See [Bank Statements]({{ '/api-reference/statements/' | relative_url }}) and [Transactions]({{ '/api-reference/transactions/' | relative_url }}) for the statement/transaction endpoints, and [Account & Personal Data]({{ '/api-reference/account/' | relative_url }}) for export/erasure.
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/auth/register/` | No | Create a new user |
+| `POST` | `/api/auth/login/` | No | Log in and receive JWT tokens |
+| `POST` | `/api/auth/refresh/` | No | Refresh an expired access token |
+| `DELETE` | `/api/auth/account/` | Yes | Delete the authenticated user's account |
+| `GET` | `/api/auth/export/` | Yes | Export all personal data for the user |
+| `GET` | `/api/statements/` | Yes | List the logged-in user's statements |
+| `POST` | `/api/statements/upload/` | Yes | Upload and process a PDF statement |
+| `GET` | `/api/statements/<id>/` | Yes | Retrieve a statement and its transactions |
+| `DELETE` | `/api/statements/<id>/` | Yes | Delete one statement and its file |
+| `GET` | `/api/statements/<id>/file/` | Yes | Download the original uploaded PDF |
+| `DELETE` | `/api/statements/delete-all/` | Yes | Delete every statement belonging to the user |
+| `GET` | `/api/statements/analytics/` | Yes | Return AI evaluations for processed statements |
+| `GET` | `/api/transactions/` | Yes | List the user's transactions |
+| `GET` | `/api/transactions/<id>/` | Yes | Retrieve one transaction |
+| `GET` | `/api/analytics/` | Yes | Compatibility alias for analytics |
 
-## Register a User
-{: #register-a-user }
+## Auth flows
 
-Creates a new user account.
+### Register a user
 
-**Endpoint:** `POST /api/auth/register/` · **Auth:** not required
-
-**Request Body**
+```http
+POST /api/auth/register/
+Content-Type: application/json
+```
 
 ```json
 {
-  "username": "max.mustermann",
-  "email": "max@example.com",
-  "password": "ASecurePassword123"
+  "username": "alice",
+  "email": "alice@example.com",
+  "password": "StrongPass123!"
 }
 ```
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `username` | string | Yes | Unique username |
-| `email` | string | No | Email address |
-| `password` | string | Yes | Must satisfy Django's password rules (minimum length, not too similar to the username, not a common password, not entirely numeric) |
-
-**Response `201 Created`**
+Response:
 
 ```json
 {
-  "username": "max.mustermann",
-  "email": "max@example.com"
+  "username": "alice",
+  "email": "alice@example.com"
 }
 ```
 
-**Error Cases**
+### Log in
 
-- `400 Bad Request` – Username already taken, password too weak, required field missing.
+```http
+POST /api/auth/login/
+Content-Type: application/json
+```
 
 ```json
 {
-  "password": ["This password is too common."]
+  "username": "alice",
+  "password": "StrongPass123!"
 }
 ```
 
-## Login (Obtain Token)
-{: #login-obtain-token }
-
-Exchanges username + password for a token pair.
-
-**Endpoint:** `POST /api/auth/login/` · **Auth:** not required
-
-**Request Body**
+Response:
 
 ```json
 {
-  "username": "max.mustermann",
-  "password": "ASecurePassword123"
+  "refresh": "<refresh_token>",
+  "access": "<access_token>"
 }
 ```
 
-**Response `200 OK`**
+### Refresh a token
+
+```http
+POST /api/auth/refresh/
+Content-Type: application/json
+```
 
 ```json
 {
-  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "refresh": "<refresh_token>"
 }
 ```
 
-**Error Cases**
-
-- `401 Unauthorized` – Username or password incorrect.
-
-## Refresh Token
-{: #refresh-token }
-
-Issues a new access token from a valid refresh token.
-
-**Endpoint:** `POST /api/auth/refresh/` · **Auth:** not required (refresh token in the body)
-
-**Request Body**
+Response:
 
 ```json
 {
-  "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "access": "<new_access_token>"
 }
 ```
 
-**Response `200 OK`**
+## Notes on permissions
 
-```json
-{
-  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
+All endpoints except registration, login, and token refresh are protected by the default authentication class. A request without a valid token returns `401 Unauthorized`.
 
-**Error Cases**
+## Related pages
 
-- `401 Unauthorized` – Refresh token expired or invalid, or the user it refers to no longer exists (e.g. account deleted, database reset) → user must log in again.
-
----
-
-Next: [Bank Statements]({{ '/api-reference/statements/' | relative_url }}) covers upload, listing, download, and deletion.
+- [Statement endpoints](./statements.html)
+- [Transaction endpoints](./transactions.html)
+- [Account and privacy endpoints](./account.html)
+- [Installation guide](../installation/)
+- [Security overview](../security/)
