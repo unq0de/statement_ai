@@ -1,0 +1,13 @@
+title: Statement AI
+description: A practical API for processing bank statement PDFs, organizing transactions, and keeping financial data accessible and secure.
+url: "https://unq0de.github.io"
+baseurl: "/statement_ai"
+theme: minima
+markdown: kramdown
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+
+header_pages:
+  - index.md
+  - api-reference/index.md
