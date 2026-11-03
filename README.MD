@@ -79,7 +79,7 @@ docker compose exec web python manage.py migrate
 docker compose exec web python manage.py createsuperuser
 ```
 
-The API is now running at `http://localhost:8000/api/`. See [Getting Started](#getting-started) below for details, or [Using Supabase](#using-supabase-instead-of-the-local-postgres-container) if you'd rather use a hosted database instead of the local Postgres container.
+The API is now running at `http://localhost:8001/api/` (port `8000` is reserved by other local services on some hosts). See [Getting Started](#getting-started) below for details, or [Using Supabase](#using-supabase-instead-of-the-local-postgres-container) if you'd rather use a hosted database instead of the local Postgres container.
 
 ---
 
@@ -123,7 +123,7 @@ The API is now running at `http://localhost:8000/api/`. See [Getting Started](#g
 | **Framework** | Django 4.2 + Django REST Framework |
 | **Auth** | `djangorestframework-simplejwt` |
 | **Database** | PostgreSQL 15 |
-| **AI** | Google Gemini (`gemini-2.5-flash`) |
+| **AI** | Google Gemini (`gemini-3.5-flash-lite`) |
 | **Deployment** | Docker / Docker Compose |
 
 ---
@@ -162,7 +162,7 @@ sudo docker compose up -d --build
 sudo docker compose exec web python manage.py migrate
 ```
 
-The API is then available at `http://localhost:8000/api/`.
+The API is then available at `http://localhost:8001/api/`.
 
 ### Environment Variables
 
@@ -172,6 +172,8 @@ The API is then available at `http://localhost:8000/api/`.
 | `DEBUG` | `1` for development, `0` for production | `0` |
 | `GEMINI_API_KEY` | Your Google Gemini API key | `AI...` |
 | `DB_ENGINE` | `local` (default, docker Postgres) or `supabase` | `supabase` |
+| `POSTGRES_HOST` | PostgreSQL host (only used if `DB_ENGINE=local`) | `localhost` or `db` |
+| `POSTGRES_PORT` | PostgreSQL port (only used if `DB_ENGINE=local`) | `5432` |
 | `POSTGRES_DB` | Database name (only used if `DB_ENGINE=local`) | `statement_ai_db` |
 | `POSTGRES_USER` | Database user (only used if `DB_ENGINE=local`) | `statement_ai_user` |
 | `POSTGRES_PASSWORD` | Database password (only used if `DB_ENGINE=local`) | `********` |
@@ -356,12 +358,15 @@ Once the access token expires, use the [refresh endpoint](#5-refresh-token) to o
 | ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/auth/export/` | Yes | Export all personal data as JSON |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/` | Yes | List your own bank statements |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/<int:pk>/` | Yes | Retrieve a single bank statement including its transactions |
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
 | ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
 | ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/transactions/` | Yes | List your own transactions |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/transactions/<int:pk>/` | Yes | Retrieve a single transaction |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/analytics/` | Yes | Compatibility alias for statement analytics |
 
 <a id="3-register-a-user"></a>
 <details>

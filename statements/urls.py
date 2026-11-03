@@ -3,10 +3,11 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     RegisterView,
     StatementListView,
+    StatementDetailView,
     StatementUploadView,
     AnalyticsView,
     TransactionListView,
-    StatementDeleteView,
+    TransactionDetailView,
     StatementBulkDeleteView,
     StatementFileDownloadView,
     AccountDeleteView,
@@ -26,9 +27,13 @@ urlpatterns = [
     path('statements/upload/', StatementUploadView.as_view(), name='statement_upload'),
     path('statements/analytics/', AnalyticsView.as_view(), name='statement_analytics'),
     path('statements/delete-all/', StatementBulkDeleteView.as_view(), name='statement_bulk_delete'),
-    path('statements/<int:pk>/', StatementDeleteView.as_view(), name='statement_delete'),
+    path('statements/<int:pk>/', StatementDetailView.as_view(), name='statement_detail'),
     path('statements/<int:pk>/file/', StatementFileDownloadView.as_view(), name='statement_file_download'),
 
     # Transactions
     path('transactions/', TransactionListView.as_view(), name='transaction_list'),
+    path('transactions/<int:pk>/', TransactionDetailView.as_view(), name='transaction_detail'),
+
+    # Compatibility aliases
+    path('analytics/', AnalyticsView.as_view(), name='analytics_alias'),
 ]
