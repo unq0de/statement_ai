@@ -37,12 +37,15 @@ Once the access token expires, use the [refresh endpoint](#refresh-token) to obt
 | `DELETE` | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
 | `GET` | `/api/auth/export/` | Yes | Export all personal data as JSON |
 | `GET` | `/api/statements/` | Yes | List your own bank statements |
+| `GET` | `/api/statements/<int:pk>/` | Yes | Retrieve a single bank statement including its transactions |
 | `POST` | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
 | `GET` | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
 | `DELETE` | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
 | `DELETE` | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
 | `GET` | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
 | `GET` | `/api/transactions/` | Yes | List your own transactions |
+| `GET` | `/api/transactions/<int:pk>/` | Yes | Retrieve a single transaction |
+| `GET` | `/api/analytics/` | Yes | Compatibility alias for statement analytics |
 
 See [Bank Statements]({{ '/api-reference/statements/' | relative_url }}) and [Transactions]({{ '/api-reference/transactions/' | relative_url }}) for the statement/transaction endpoints, and [Account & Personal Data]({{ '/api-reference/account/' | relative_url }}) for export/erasure.
 

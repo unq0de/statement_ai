@@ -128,3 +128,63 @@ class StatementApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data[0]['description'], 'Lunch')
         self.assertEqual(len(response.data), 1)
+
+    def test_statement_and_transaction_detail_endpoints_work(self):
+        self.authenticate()
+        statement = BankStatement.objects.create(
+            user=self.user,
+            file='statements/user/detail.pdf',
+            is_processed=True,
+            ai_evaluation='Healthy budget.',
+        )
+        transaction = Transaction.objects.create(
+            statement=statement,
+            date='2024-01-02',
+            description='Salary deposit',
+            amount='2500.00',
+            payee_payer='Employer',
+            transaction_type='INCOME',
+            category='Salary & Main Income',
+        )
+
+        statement_response = self.client.get(f'/api/statements/{statement.id}/')
+        self.assertEqual(statement_response.status_code, 200)
+        self.assertEqual(statement_response.data['id'], statement.id)
+        self.assertEqual(statement_response.data['transactions'][0]['id'], transaction.id)
+
+        transaction_response = self.client.get(f'/api/transactions/{transaction.id}/')
+        self.assertEqual(transaction_response.status_code, 200)
+        self.assertEqual(transaction_response.data['id'], transaction.id)
+        self.assertEqual(transaction_response.data['description'], 'Salary deposit')
+
+    def test_transactions_support_filters_and_sorting(self):
+        self.authenticate()
+        statement = BankStatement.objects.create(
+            user=self.user,
+            file='statements/user/filter.pdf',
+        )
+        Transaction.objects.create(
+            statement=statement,
+            date='2024-01-01',
+            description='Groceries',
+            amount='25.00',
+            payee_payer='Supermarket',
+            transaction_type='CARD_PAYMENT',
+            category='Groceries & Food',
+        )
+        Transaction.objects.create(
+            statement=statement,
+            date='2024-01-05',
+            description='Rental income',
+            amount='1500.00',
+            payee_payer='Tenant',
+            transaction_type='INCOME',
+            category='Salary & Main Income',
+        )
+
+        response = self.client.get(
+            '/api/transactions/?category=Groceries%20%26%20Food&ordering=-date'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['description'], 'Groceries')

@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.utils import timezone
 from rest_framework import generics, permissions, status
@@ -63,10 +64,40 @@ class StatementListView(generics.ListAPIView):
     serializer_class = BankStatementSerializer
 
     def get_queryset(self):
+        queryset = BankStatement.objects.filter(user=self.request.user)
 
-        return BankStatement.objects.filter(
-            user=self.request.user
-        ).order_by("-id")
+        processed_value = self.request.query_params.get('processed')
+        if processed_value is not None:
+            queryset = queryset.filter(is_processed=processed_value.lower() in {'1', 'true', 'yes', 'on'})
+
+        ordering = self.request.query_params.get('ordering', '-uploaded_at')
+        if ordering in {'uploaded_at', '-uploaded_at'}:
+            return queryset.order_by(ordering)
+
+        return queryset.order_by('-uploaded_at')
+
+
+class StatementDetailView(generics.RetrieveDestroyAPIView):
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = BankStatementSerializer
+
+    def get_queryset(self):
+        return BankStatement.objects.filter(user=self.request.user)
+
+    def perform_destroy(self, instance):
+        if instance.file:
+            instance.file.delete(save=False)
+        instance.delete()
+
+    def delete(self, request, *args, **kwargs):
+        super().delete(request, *args, **kwargs)
+        return Response(
+            {
+                "message": "Bank statement and all related transactions were deleted successfully."
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class StatementUploadView(generics.CreateAPIView):
@@ -136,10 +167,38 @@ class TransactionListView(generics.ListAPIView):
     serializer_class = TransactionSerializer
 
     def get_queryset(self):
+        queryset = Transaction.objects.filter(statement__user=self.request.user)
 
-        return Transaction.objects.filter(
-            statement__user=self.request.user
-        ).order_by("-date")
+        statement_id = self.request.query_params.get('statement_id')
+        if statement_id:
+            queryset = queryset.filter(statement_id=statement_id)
+
+        category = self.request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category__iexact=category)
+
+        search = self.request.query_params.get('q')
+        if search:
+            queryset = queryset.filter(
+                Q(description__icontains=search) |
+                Q(payee_payer__icontains=search) |
+                Q(category__icontains=search)
+            )
+
+        ordering = self.request.query_params.get('ordering', '-date')
+        if ordering in {'date', '-date', 'amount', '-amount'}:
+            return queryset.order_by(ordering)
+
+        return queryset.order_by('-date')
+
+
+class TransactionDetailView(generics.RetrieveAPIView):
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TransactionSerializer
+
+    def get_queryset(self):
+        return Transaction.objects.filter(statement__user=self.request.user)
 
 
 class AnalyticsView(generics.GenericAPIView):
@@ -157,32 +216,6 @@ class AnalyticsView(generics.GenericAPIView):
             if s.ai_evaluation
         ]
         return Response({"evaluations": evaluations}, status=status.HTTP_200_OK)
-
-
-class StatementDeleteView(generics.DestroyAPIView):
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-
-        return BankStatement.objects.filter(user=self.request.user)
-
-    def perform_destroy(self, instance):
-
-        if instance.file:
-
-            instance.file.delete(save=False)
-        instance.delete()
-
-    def destroy(self, request, *args, **kwargs):
-
-        super().destroy(request, *args, **kwargs)
-        return Response(
-            {
-                "message": "Bank statement and all related transactions were deleted successfully."
-            },
-            status=status.HTTP_200_OK,
-        )
 
 
 class StatementBulkDeleteView(generics.GenericAPIView):

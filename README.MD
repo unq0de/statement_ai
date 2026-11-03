@@ -358,12 +358,15 @@ Once the access token expires, use the [refresh endpoint](#5-refresh-token) to o
 | ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/auth/export/` | Yes | Export all personal data as JSON |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/` | Yes | List your own bank statements |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/<int:pk>/` | Yes | Retrieve a single bank statement including its transactions |
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
 | ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
 | ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/<int:pk>/file/` | Yes | Download the original PDF of a bank statement |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/transactions/` | Yes | List your own transactions |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/transactions/<int:pk>/` | Yes | Retrieve a single transaction |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/analytics/` | Yes | Compatibility alias for statement analytics |
 
 <a id="3-register-a-user"></a>
 <details>
