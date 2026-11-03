@@ -6,26 +6,27 @@ from .models import BankStatement, Transaction
 
 try:
     from google import genai as google_genai
+    from google.genai import types
 except ImportError:  # pragma: no cover - dependency is optional for offline tests.
     google_genai = None
+    types = None
 
 
-def _get_gemini_model():
+def _get_gemini_client():
     if not settings.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured.")
 
     if google_genai is None:
         raise RuntimeError("Google Gemini SDK is not installed.")
 
-    client = google_genai.Client(api_key=settings.GEMINI_API_KEY)
-    return client.models
+    return google_genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 def process_pdf_statement_with_gemini(statement_instance):
     """Extracts transactions from a bank statement PDF with Gemini and stores the
     results in English in the database.
     """
-    model = _get_gemini_model()
+    client = _get_gemini_client()
 
     pdf_bytes = statement_instance.file.read()
 
@@ -83,15 +84,13 @@ def process_pdf_statement_with_gemini(statement_instance):
     Note for amount: Outgoing payments MUST be negative numbers (e.g. -12.50). Incoming payments MUST be positive numbers (e.g. 1500.00).
     """
 
-    try:
-        response = model.generate_content(
-            [prompt, {"mime_type": "application/pdf", "data": pdf_bytes}]
-        )
-    except TypeError:
-        response = model.generate_content(
-            model="gemini-2.5-flash",
-            contents=[prompt, {"mime_type": "application/pdf", "data": pdf_bytes}],
-        )
+    response = client.models.generate_content(
+        model="gemini-3.5-flash-lite",
+        contents=[
+            prompt,
+            types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+        ],
+    )
 
     response_text = getattr(response, 'text', '')
     if not response_text:

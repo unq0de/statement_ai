@@ -123,7 +123,7 @@ The API is now running at `http://localhost:8001/api/` (port `8000` is reserved 
 | **Framework** | Django 4.2 + Django REST Framework |
 | **Auth** | `djangorestframework-simplejwt` |
 | **Database** | PostgreSQL 15 |
-| **AI** | Google Gemini (`gemini-2.5-flash`) |
+| **AI** | Google Gemini (`gemini-3.5-flash-lite`) |
 | **Deployment** | Docker / Docker Compose |
 
 ---
