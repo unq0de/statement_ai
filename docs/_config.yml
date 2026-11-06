@@ -10,4 +10,9 @@ plugins:
 
 header_pages:
   - index.md
+  - getting-started/index.md
+  - installation/index.md
+  - features/index.md
   - api-reference/index.md
+  - security/index.md
+  - troubleshooting/index.md

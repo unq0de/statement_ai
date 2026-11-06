@@ -7,80 +7,63 @@ title: Statement AI
 
 # Statement AI
 
-A simple and reliable API for processing bank statement PDFs, extracting transactions, and turning them into structured financial data.
+A backend for processing bank statement PDFs, extracting transactions, categorizing them, and returning structured financial data through a secure REST API.
 
 <p>
   <img src="https://img.shields.io/badge/python-3.11-blue?logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/django-4.2-092E20?logo=django&logoColor=white" alt="Django" />
   <img src="https://img.shields.io/badge/drf-3.14-red?logo=django&logoColor=white" alt="DRF" />
   <img src="https://img.shields.io/badge/postgres-15-336791?logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/gemini-ai-8E75B2?logo=googlegemini&logoColor=white" alt="Google Gemini" />
   <img src="https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white" alt="Docker" />
 </p>
 
-<a href="api-reference/">API Reference</a>
-·
-<a href="https://github.com/unq0de/statement_ai">GitHub</a>
-·
-<a href="https://github.com/unq0de/statement_ai#readme">README</a>
+[Getting started]({{ '/getting-started/' | relative_url }}) ·
+[Installation]({{ '/installation/' | relative_url }}) ·
+[Features]({{ '/features/' | relative_url }}) ·
+[API Reference]({{ '/api-reference/' | relative_url }}) ·
+[Security]({{ '/security/' | relative_url }}) ·
+[Troubleshooting]({{ '/troubleshooting/' | relative_url }})
 
 </div>
 
-## Overview
+## What this project does
 
-Statement AI helps you upload bank statement PDFs, organize the data, and keep everything scoped to the correct user. The API validates the uploaded file, extracts relevant transaction information, and makes the result available in a structured, easy-to-consume format.
+Statement AI is a Django REST API for personal finance workflows. You upload a PDF bank statement, the application validates the file, and then the backend sends the document to Google Gemini for extraction and categorization. The result is saved in a per-user database with structured transactions and an AI-generated summary.
 
-It is designed for a clear workflow:
+The project is deliberately small and practical. It focuses on a clear flow:
 
-1. Upload a PDF statement
-2. Store it securely per user
-3. Extract the transaction data
-4. Review the saved transactions and evaluation
-5. Export or manage the data when needed
+1. Create an account or log in.
+2. Upload a PDF bank statement.
+3. Validate the file and process it.
+4. Review extracted transactions and AI evaluation.
+5. Manage, export, or delete your data.
 
-## Why this project exists
+## Main capabilities
 
-Many finance workflows still depend on manual extraction from PDF statements. This project gives you a clean backend structure to automate that process without adding unnecessary complexity.
+- JWT authentication for user sessions
+- Upload and validation of PDF statement files
+- Transaction extraction and categorization with Google Gemini
+- AI-generated evaluation for each processed statement
+- Secure ownership checks for statement and transaction access
+- Personal data export and account deletion
+- Daily automatic cleanup for expired statements
+- Local Docker-based setup with PostgreSQL
 
-The result is a backend that is:
-
-- secure and user-isolated
-- easy to run locally with Docker
-- structured around bank statements and transactions
-- suitable for personal finance and financial data processing workflows
-
-## Core features
-
-- PDF upload and validation
-- Per-user statement storage
-- Structured transaction extraction
-- Statement analytics and evaluation results
-- JWT authentication
-- Account deletion and personal data export
-- Docker-based local setup
-
-## How it works
-
-The typical flow looks like this:
+## Typical workflow
 
 ```text
 Upload PDF
-  -> validate file type and content
+  -> validate file type and metadata
   -> store statement for the authenticated user
-  -> extract transactions and metadata
-  -> save processed data
-  -> return statement and transaction records
+  -> call Gemini to read the document
+  -> save extracted transactions and summary
+  -> return the statement with its data
 ```
-
-Everything is scoped to the logged-in user, so data from one account is never exposed to another user.
 
 ## Quick start
 
-### Prerequisites
-
-- Docker and Docker Compose
-- A Google Gemini API key
-
-### Local setup
+You can get the application running locally in a few steps:
 
 ```bash
 git clone https://github.com/unq0de/statement_ai.git
@@ -88,61 +71,49 @@ cd statement_ai
 cp .env.example .env
 ```
 
-Add your environment values, then start the app:
+Then start the stack and apply the schema:
 
 ```bash
 docker compose up -d --build
 docker compose exec web python manage.py migrate
 ```
 
-The API will be available at:
+The API is exposed at:
 
 ```text
 http://localhost:8001/api/
 ```
 
-## API at a glance
-
-The API exposes a small set of authenticated endpoints for users, statements, transactions, and account management.
-
-- User registration and login
-- Statement upload and listing
-- Statement detail and file download
-- Transaction listing and lookup
-- Analytics and summary data
-- Account deletion and export
-
-See the [API Reference](api-reference/) for the full documentation.
-
 ## Project structure
 
 ```text
 statement_ai/
-├── statement_ai/          # Django project configuration
-├── statements/            # API views, models, serializers, services
-├── docs/                  # GitHub Pages documentation
-├── cron/                  # scheduled cleanup job
-├── tools/                 # local helper scripts
-├── docker-compose.yml     # local stack setup
-├── Dockerfile             # application container
-├── requirements.txt       # Python dependencies
-├── manage.py              # Django entry point
-└── README.MD              # project overview
+├── statement_ai/         # Django project settings and routing
+├── statements/           # Models, views, serializers, services
+├── docs/                 # GitHub Pages documentation
+├── cron/                 # retention cleanup sidecar
+├── tools/                # PDF generation helper scripts
+├── testdata/             # sample PDFs for testing
+├── Dockerfile            # application image
+├── docker-compose.yml    # local services
+├── manage.py             # Django entry point
+├── requirements.txt      # Python requirements
+├── README.MD             # project overview
+├── .env.example          # environment configuration
+└── .env                  # local secrets (not committed)
 ```
 
-## Built for clarity
+## Where to go next
 
-This project aims to stay simple and practical:
+- [Getting started]({{ '/getting-started/' | relative_url }}) for a guided introduction
+- [Installation]({{ '/installation/' | relative_url }}) for environment and Docker setup
+- [Features]({{ '/features/' | relative_url }}) for workflow and capability documentation
+- [API Reference]({{ '/api-reference/' | relative_url }}) for endpoint details
+- [Security]({{ '/security/' | relative_url }}) for privacy and retention information
+- [Troubleshooting]({{ '/troubleshooting/' | relative_url }}) for common setup issues
 
-- clear API boundaries
-- explicit ownership checks
-- straightforward local setup
-- easy-to-follow documentation
+## Repository
 
-It is meant to be useful for real-world development and testing without becoming heavy or over-engineered.
-
-## Open the docs
-
-- [API Reference](api-reference/)
-- [GitHub Repository](https://github.com/unq0de/statement_ai)
+- [GitHub repository](https://github.com/unq0de/statement_ai)
+- [README](https://github.com/unq0de/statement_ai#readme)
 
