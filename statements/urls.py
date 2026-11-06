@@ -1,6 +1,9 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
+    LoginView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
+    PasswordRevokingTokenRefreshView,
     RegisterView,
     StatementListView,
     StatementDetailView,
@@ -17,8 +20,10 @@ from .views import (
 urlpatterns = [
     # Auth
     path('auth/register/', RegisterView.as_view(), name='auth_register'),
-    path('auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('auth/login/', LoginView.as_view(), name='token_obtain_pair'),
+    path('auth/password-reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
+    path('auth/password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('auth/refresh/', PasswordRevokingTokenRefreshView.as_view(), name='token_refresh'),
     path('auth/account/', AccountDeleteView.as_view(), name='account_delete'),
     path('auth/export/', DataExportView.as_view(), name='data_export'),
 

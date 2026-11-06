@@ -360,7 +360,9 @@ Authorization: Bearer <access_token>
 | Access Token | 60 minutes |
 | Refresh Token | 1 day |
 
-Once the access token expires, use the [refresh endpoint](#5-refresh-token) to obtain a new one without logging in again. All endpoints except registration and login require a valid access token — without one, the API responds with `401 Unauthorized`.
+Once the access token expires, use the [refresh endpoint](#5-refresh-token) to obtain a new one without logging in again. All endpoints except registration, login, password reset, and token refresh require a valid access token — without one, the API responds with `401 Unauthorized`.
+
+Rate limits are applied before API permissions. Anonymous requests are limited to **60 per minute per IP address**; authenticated requests are limited to **120 per minute per user**. Registration and password-reset requests are limited to **5 per hour per IP**; reset emails are also limited to **3 per hour per normalized email address**. Login is limited to **10 per minute per IP**, password-reset confirmations to **10 per hour per IP**, and uploads to **5 per hour per user**. Five failed login attempts for the same IP address and username trigger a 15-minute cooldown. A successful login resets that counter. Exceeded limits return `429 Too Many Requests` with an `error` field and a `Retry-After` header.
 
 ### 2. Endpoints Overview
 
@@ -368,6 +370,8 @@ Once the access token expires, use the [refresh endpoint](#5-refresh-token) to o
 |---|---|---|---|
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/register/` | No | Register a new user |
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/login/` | No | Obtain access & refresh tokens |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/password-reset/` | No | Request password reset instructions |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/password-reset/confirm/` | No | Set a new password using a reset token |
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/refresh/` | No (refresh token required) | Obtain a new access token |
 | ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/auth/account/` | Yes | Permanently delete your account and all associated data |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/auth/export/` | Yes | Export all personal data as JSON |
@@ -404,7 +408,10 @@ Creates a new user account.
 |---|---|---|---|
 | `username` | string | Yes | Unique username |
 | `email` | string | No | Email address |
-| `password` | string | Yes | Must satisfy Django's password rules (minimum length, not too similar to the username, not a common password, not entirely numeric) |
+| `password` | string | Yes | At least 12 characters; not too similar to account details, a common password, or entirely numeric |
+
+Passphrases are accepted; a specific mix of character types is not required.
+Existing accounts whose correct password does not meet the current rules must reset it before receiving new JWTs.
 
 **Response `201 Created`**
 
@@ -418,6 +425,7 @@ Creates a new user account.
 **Error Cases**
 
 - `400 Bad Request` – Username already taken, password too weak, required field missing.
+- `429 Too Many Requests` – The registration limit of five requests per hour per IP address has been reached.
 
 ```json
 {
@@ -456,6 +464,44 @@ Exchanges username + password for a token pair.
 **Error Cases**
 
 - `401 Unauthorized` – Username or password incorrect.
+- `429 Too Many Requests` – The login or failed-attempt limit has been reached.
+
+</details>
+
+<details>
+<summary><b>Password Reset</b></summary>
+
+Request a reset email without revealing whether an account exists:
+
+```http
+POST /api/auth/password-reset/
+Content-Type: application/json
+```
+
+```json
+{
+  "email": "john@example.com"
+}
+```
+
+The API always returns the same `200 OK` message. If the email belongs to one active account, the message contains a one-time reset token and a link to the configured client page.
+
+Submit the `uid` and `token` from that link together with the new password:
+
+```http
+POST /api/auth/password-reset/confirm/
+Content-Type: application/json
+```
+
+```json
+{
+  "uid": "MQ",
+  "token": "<one_time_token>",
+  "new_password": "A-long-passphrase-2026"
+}
+```
+
+Reset tokens expire after one hour by default, are single-use, and invalidate existing access and refresh tokens. Configure SMTP and an HTTPS `PASSWORD_RESET_URL` for production; development sends reset messages to the web container console.
 
 </details>
 
@@ -485,7 +531,7 @@ Issues a new access token from a valid refresh token.
 
 **Error Cases**
 
-- `401 Unauthorized` – Refresh token expired or invalid, or the user it refers to no longer exists (e.g. account deleted, database reset) → user must log in again.
+- `401 Unauthorized` – Refresh token expired, invalid, or revoked after a password change; the user must log in again.
 
 </details>
 
@@ -822,7 +868,7 @@ Permanently deletes the authenticated user's account, including all bank stateme
 <details>
 <summary><b>16. Error Format</b></summary>
 
-Errors are returned consistently as a JSON object with an `error` field (exception: registration validation errors, which are field-specific):
+Most API errors are returned as a JSON object with an `error` field. Registration validation errors are field-specific. Rate-limit responses include the `Retry-After` header.
 
 ```json
 { "error": "Description of the error." }
@@ -832,6 +878,7 @@ Errors are returned consistently as a JSON object with an `error` field (excepti
 |---|---|
 | `400 Bad Request` | Invalid or missing input data |
 | `401 Unauthorized` | Missing, invalid, or expired token |
+| `429 Too Many Requests` | An API rate limit was exceeded |
 | `404 Not Found` | Resource does not exist or belongs to another user |
 | `500 Internal Server Error` | Unexpected server error (e.g. AI processing failed) |
 

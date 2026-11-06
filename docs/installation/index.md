@@ -43,6 +43,17 @@ POSTGRES_USER=statement_ai_user
 POSTGRES_PASSWORD=Test123!
 ALLOWED_HOSTS=
 CORS_ALLOWED_ORIGINS=
+REDIS_URL=redis://redis:6379/1
+NUM_PROXIES=0
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=your-smtp-user
+EMAIL_HOST_PASSWORD=your-smtp-password
+EMAIL_USE_TLS=1
+EMAIL_USE_SSL=0
+DEFAULT_FROM_EMAIL=Statement AI <no-reply@example.com>
+PASSWORD_RESET_TIMEOUT=3600
+PASSWORD_RESET_URL=https://app.example.com/reset-password/
 ```
 
 ## 3. Database configuration
@@ -82,7 +93,9 @@ SUPABASE_DB_SSLMODE=require
 docker compose up -d --build
 ```
 
-This starts the web and cron containers, as well as the PostgreSQL database service.
+This starts the web and cron containers, the PostgreSQL database, and the shared Redis cache used for rate limits. Production deployments with `DEBUG=0` must set `REDIS_URL` to a reachable Redis instance.
+
+Password reset also requires working SMTP settings and a client page at `PASSWORD_RESET_URL`. In development, the console email backend prints reset messages in the web container logs.
 
 ## 5. Apply migrations
 

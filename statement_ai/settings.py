@@ -1,12 +1,14 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-secret-key')
 DEBUG = os.environ.get('DEBUG', '0') == '1'
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+REDIS_URL = os.environ.get('REDIS_URL')
 
 # GDPR: max. number of days a bank statement (incl. PDF + transactions) is
 # retained before it becomes eligible for deletion by the
@@ -43,6 +45,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'statements.middleware.APIRateLimitMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -126,7 +129,10 @@ else:
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 12},
+    },
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
@@ -153,10 +159,72 @@ REST_FRAMEWORK = {
     # since-deleted user) come back as a clean JSON error instead of a
     # raw Django debug page / opaque 500. See statements/exceptions.py.
     'EXCEPTION_HANDLER': 'statements.exceptions.custom_exception_handler',
+    'NUM_PROXIES': int(os.environ.get('NUM_PROXIES', '0')),
 }
+
+API_RATE_LIMITS = {
+    'anonymous': {'limit': 60, 'window_seconds': 60},
+    'authenticated': {'limit': 120, 'window_seconds': 60},
+    'registration': {'limit': 5, 'window_seconds': 60 * 60},
+    'login': {'limit': 10, 'window_seconds': 60},
+    'password_reset': {'limit': 5, 'window_seconds': 60 * 60},
+    'password_reset_email': {'limit': 3, 'window_seconds': 60 * 60},
+    'password_reset_confirm': {'limit': 10, 'window_seconds': 60 * 60},
+    'upload': {'limit': 5, 'window_seconds': 60 * 60},
+}
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}
+
+if REDIS_URL:
+    CACHES['default'] = {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'SOCKET_CONNECT_TIMEOUT': 2,
+            'SOCKET_TIMEOUT': 2,
+        },
+        'KEY_PREFIX': 'statement_ai',
+    }
+elif not DEBUG:
+    raise RuntimeError('REDIS_URL must be set in production for shared rate limits.')
+
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND') or (
+    'django.core.mail.backends.console.EmailBackend'
+    if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT') or 587)
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', '').lower() in {'1', 'true', 'yes'}
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', '').lower() in {'1', 'true', 'yes'}
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT') or 10)
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or 'webmaster@localhost'
+PASSWORD_RESET_TIMEOUT = int(os.environ.get('PASSWORD_RESET_TIMEOUT') or 3600)
+PASSWORD_RESET_URL = os.environ.get('PASSWORD_RESET_URL') or (
+    'http://localhost:3000/reset-password/' if DEBUG else ''
+)
+
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise RuntimeError('EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled.')
+
+if not DEBUG:
+    if not EMAIL_HOST or DEFAULT_FROM_EMAIL == 'webmaster@localhost':
+        raise RuntimeError('EMAIL_HOST and DEFAULT_FROM_EMAIL must be set in production.')
+    if not EMAIL_USE_TLS and not EMAIL_USE_SSL:
+        raise RuntimeError('EMAIL_USE_TLS or EMAIL_USE_SSL must be enabled in production.')
+    reset_url = urlsplit(PASSWORD_RESET_URL)
+    if reset_url.scheme != 'https' or not reset_url.netloc:
+        raise RuntimeError('PASSWORD_RESET_URL must be an absolute HTTPS URL in production.')
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'AUTH_HEADER_TYPES': ('Bearer',),
+    'CHECK_REVOKE_TOKEN': True,
 }

@@ -1,24 +1,37 @@
 import logging
+import math
 from datetime import timedelta
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
+from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.models import User
+from django.core.mail import send_mail
+from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.utils import timezone
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .models import BankStatement, Transaction
 from .serializers import (
     AccountDeleteSerializer,
     BankStatementSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
+    PasswordRevokingTokenRefreshSerializer,
+    RateLimitedTokenObtainPairSerializer,
     TransactionSerializer,
     UserRegistrationSerializer,
 )
 from .services import process_pdf_statement_with_gemini
+from .throttles import FailedLoginThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +69,106 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = [permissions.AllowAny]
     serializer_class = UserRegistrationSerializer
+
+
+class LoginView(TokenObtainPairView):
+
+    serializer_class = RateLimitedTokenObtainPairSerializer
+    throttle_classes = [FailedLoginThrottle]
+
+
+class PasswordRevokingTokenRefreshView(TokenRefreshView):
+
+    serializer_class = PasswordRevokingTokenRefreshSerializer
+
+
+class PasswordResetRequestView(generics.GenericAPIView):
+
+    permission_classes = [permissions.AllowAny]
+    serializer_class = PasswordResetRequestSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        users = User.objects.filter(
+            email__iexact=email,
+            is_active=True,
+        )
+
+        if users.count() == 1:
+            self._send_reset_email(users.first())
+
+        return Response(
+            {'message': 'If an active account uses that email, reset instructions have been sent.'},
+            status=status.HTTP_200_OK,
+        )
+
+    @staticmethod
+    def _send_reset_email(user):
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        reset_url = settings.PASSWORD_RESET_URL
+
+        if reset_url:
+            parts = urlsplit(reset_url)
+            fragment = parse_qsl(parts.fragment, keep_blank_values=True)
+            fragment.extend((('uid', uid), ('token', token)))
+            reset_link = urlunsplit(parts._replace(fragment=urlencode(fragment)))
+            instructions = f'Reset your password using this link:\n{reset_link}'
+        else:
+            instructions = (
+                'Submit these values to POST /api/auth/password-reset/confirm/:\n'
+                f'uid: {uid}\ntoken: {token}'
+            )
+
+        expiry_minutes = max(1, math.ceil(settings.PASSWORD_RESET_TIMEOUT / 60))
+        message = (
+            'A password reset was requested for your account.\n\n'
+            f'{instructions}\n\n'
+            f'This link expires in {expiry_minutes} minutes. '
+            'If you did not request this change, you can ignore this email.'
+        )
+
+        try:
+            delivered = send_mail(
+                subject='Reset your password',
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+            if not delivered:
+                logger.error('Password reset email was not delivered for user %s.', user.pk)
+        except Exception:
+            logger.exception('Password reset email delivery failed for user %s.', user.pk)
+
+
+class PasswordResetConfirmView(generics.GenericAPIView):
+
+    permission_classes = [permissions.AllowAny]
+    serializer_class = PasswordResetConfirmSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = serializer.validated_data
+
+        with transaction.atomic():
+            user = User.objects.select_for_update().get(pk=validated_data['user'].pk)
+            if not default_token_generator.check_token(user, validated_data['token']):
+                return Response(
+                    {'error': 'This password reset link is invalid or expired.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            user.set_password(validated_data['new_password'])
+            user.save(update_fields=['password'])
+
+        return Response(
+            {'message': 'Your password has been reset. Please log in again.'},
+            status=status.HTTP_200_OK,
+        )
 
 
 class StatementListView(generics.ListAPIView):
