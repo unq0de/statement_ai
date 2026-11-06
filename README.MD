@@ -71,6 +71,8 @@ cp .env.example .env
 
 Fill in `SECRET_KEY` and `GEMINI_API_KEY` at minimum.
 
+For local development, keep `DEBUG=1` as set in `.env.example`. If you set `DEBUG=0`, configure `ALLOWED_HOSTS` with the hostnames used to access the app (for example, `localhost,127.0.0.1`); otherwise, the `web` service will exit during startup.
+
 **3. Start the stack**
 
 ```bash
