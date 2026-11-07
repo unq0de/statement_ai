@@ -50,18 +50,15 @@ docker compose up -d --build
 This starts:
 
 - the Django web application on port `8001`
+- a Celery worker for background statement processing
 - a PostgreSQL database on port `5432`
+- Redis for background tasks and shared rate limits
 - the custom retention cron job
+- a one-off migration service that applies pending migrations before the application services start
 
-## Step 4: Run database migrations
+If a migration fails, the web, worker, and cron services do not start.
 
-```bash
-docker compose exec web python manage.py migrate
-```
-
-This creates the database schema for the `BankStatement` and `Transaction` models.
-
-## Step 5: Optional admin account
+## Step 4: Optional admin account
 
 If you want to use the Django admin interface, create a superuser:
 
@@ -75,7 +72,7 @@ The admin is available at:
 http://localhost:8001/admin/
 ```
 
-## Step 6: Verify that the API is online
+## Step 5: Verify that the API is online
 
 Open the API root:
 
@@ -85,7 +82,7 @@ http://localhost:8001/api/
 
 The app is ready once the HTTP response comes back and the login endpoints are available.
 
-## Step 7: Register and log in
+## Step 6: Register and log in
 
 Create a user:
 

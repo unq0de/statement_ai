@@ -10,9 +10,9 @@ This project includes a focused set of real features that are available in the c
 
 ## User registration and authentication
 
-The API uses Django's default user model together with Django REST Framework simple JWT. Users can create an account with a username, email, and password. The service validates password strength using Django's built-in password validators.
+The API uses Django's default user model together with Django REST Framework simple JWT. Users can create an account with a username, email, and password. New accounts remain inactive until the address is confirmed through a one-time email link. The service validates passwords using Django's built-in validators, with the minimum length and individual checks configurable through environment variables.
 
-After registration, users log in through the token endpoint. The login response contains both `access` and `refresh` tokens.
+After confirming the email address, users log in through the token endpoint. The login response contains both `access` and `refresh` tokens. A confirmation email can be requested again without revealing whether an address has an unconfirmed account. Users can optionally enable TOTP two-factor authentication; enrolled users complete a short-lived challenge before receiving JWTs.
 
 ## Statement uploads
 
@@ -35,7 +35,7 @@ Once a file passes validation, the project creates a `BankStatement` record for 
 
 The backend performs file validation before it saves or processes a document. It only accepts PDF uploads and rejects anything that is clearly not a valid PDF, including malformed content and oversized uploads.
 
-If the upload is valid, the project sends the file to Google Gemini for a structured extraction pass. The processing result is stored in the same `BankStatement` record.
+If the upload is valid, the API stores it and queues a background task for Google Gemini processing. The upload returns immediately with a statement ID and status URL. The client can poll the status endpoint; the statement records whether processing is pending, active, complete, or failed.
 
 ## AI transaction extraction
 

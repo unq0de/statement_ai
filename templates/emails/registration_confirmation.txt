@@ -1,0 +1,6 @@
+Hello {{ username }},
+
+Confirm your email address using this link:
+{{ confirmation_link|safe }}
+
+This link expires in {{ expiry_minutes }} minutes. If you did not create an account, you can ignore this email.

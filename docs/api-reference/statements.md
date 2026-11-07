@@ -34,6 +34,7 @@ Example response:
     "id": 1,
     "file": "/media/statements/2026/11/statement.pdf",
     "uploaded_at": "2026-11-03T14:47:12Z",
+    "processing_status": "completed",
     "is_processed": true,
     "ai_evaluation": "You had a stable month...",
     "transactions": []
@@ -62,24 +63,42 @@ curl -X POST \
   http://localhost:8001/api/statements/upload/
 ```
 
-The upload endpoint enforces a few checks before processing:
+The upload endpoint validates the file, stores it, and queues background processing:
 
 - the file must be a PDF
 - the content must look like a real PDF header
 - the file must be under 10 MB
 - the request must be authenticated
 
-Successful response:
+Accepted response (`202 Accepted`):
 
 ```json
 {
-  "message": "Bank statement processed successfully.",
+  "message": "Bank statement accepted for processing.",
   "statement_id": 1,
-  "ai_evaluation": "You had a stable month..."
+  "processing_status": "pending",
+  "status_url": "/api/statements/1/status/"
 }
 ```
 
-If the file is invalid or the AI processing fails, the API returns an error response instead of storing a broken record.
+Poll `status_url` until `processing_status` is `completed` or `failed`. The status endpoint returns the evaluation when processing is complete and a safe error message if processing ultimately fails:
+
+```http
+GET /api/statements/<id>/status/
+Authorization: Bearer <access_token>
+```
+
+```json
+{
+  "statement_id": 1,
+  "processing_status": "processing",
+  "is_processed": false,
+  "error": null,
+  "ai_evaluation": null
+}
+```
+
+Processing states are `pending`, `processing`, `completed`, and `failed`. Invalid files still receive an immediate `400 Bad Request`. If the queue is unavailable, the upload returns `503 Service Unavailable` and the statement status is `failed`.
 
 ## Retrieve one statement
 
@@ -95,6 +114,7 @@ Example response:
   "id": 1,
   "file": "/media/statements/2026/11/statement.pdf",
   "uploaded_at": "2026-11-03T14:47:12Z",
+  "processing_status": "completed",
   "is_processed": true,
   "ai_evaluation": "You had a stable month...",
   "transactions": [

@@ -1,8 +1,13 @@
 import json
+import logging
+import time
 
 from django.conf import settings
+from django.db import transaction as db_transaction
 
-from .models import BankStatement, Transaction
+from .models import BankStatement, GeminiUsageRecord, Transaction
+
+logger = logging.getLogger(__name__)
 
 try:
     from google import genai as google_genai
@@ -20,6 +25,35 @@ def _get_gemini_client():
         raise RuntimeError("Google Gemini SDK is not installed.")
 
     return google_genai.Client(api_key=settings.GEMINI_API_KEY)
+
+
+def _token_count(usage_metadata, name):
+    value = getattr(usage_metadata, name, None)
+    try:
+        return max(0, int(value)) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _record_gemini_usage(statement, model_name, status, started_at, response=None, error=None):
+    if not settings.API_USAGE_TRACKING_ENABLED:
+        return
+
+    usage_metadata = getattr(response, 'usage_metadata', None)
+    try:
+        GeminiUsageRecord.objects.create(
+            user_id=statement.user_id,
+            statement=statement,
+            model_name=model_name,
+            status=status,
+            prompt_tokens=_token_count(usage_metadata, 'prompt_token_count'),
+            completion_tokens=_token_count(usage_metadata, 'candidates_token_count'),
+            total_tokens=_token_count(usage_metadata, 'total_token_count'),
+            duration_ms=max(0, int((time.monotonic() - started_at) * 1000)),
+            error_type=type(error).__name__ if error else '',
+        )
+    except Exception:
+        logger.exception('Could not save Gemini usage for statement %s.', statement.pk)
 
 
 def process_pdf_statement_with_gemini(statement_instance):
@@ -84,12 +118,32 @@ def process_pdf_statement_with_gemini(statement_instance):
     Note for amount: Outgoing payments MUST be negative numbers (e.g. -12.50). Incoming payments MUST be positive numbers (e.g. 1500.00).
     """
 
-    response = client.models.generate_content(
-        model="gemini-3.5-flash-lite",
-        contents=[
-            prompt,
-            types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
-        ],
+    model_name = 'gemini-3.5-flash-lite'
+    started_at = time.monotonic()
+    try:
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[
+                prompt,
+                types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+            ],
+        )
+    except Exception as error:
+        _record_gemini_usage(
+            statement_instance,
+            model_name,
+            'failed',
+            started_at,
+            error=error,
+        )
+        raise
+
+    _record_gemini_usage(
+        statement_instance,
+        model_name,
+        'succeeded',
+        started_at,
+        response=response,
     )
 
     response_text = getattr(response, 'text', '')
@@ -105,20 +159,24 @@ def process_pdf_statement_with_gemini(statement_instance):
 
     data = json.loads(response_text.strip())
 
-    statement_instance.ai_evaluation = data.get("ai_evaluation", "")
-    statement_instance.is_processed = True
-    statement_instance.save()
-
     transactions_data = data.get("transactions", [])
-    for tx in transactions_data:
-        Transaction.objects.create(
-            statement=statement_instance,
-            date=tx.get("date"),
-            amount=tx.get("amount", 0.0),
-            payee_payer=tx.get("payee_payer", ""),
-            description=tx.get("description", ""),
-            transaction_type=tx.get("transaction_type", "FEE_CHARGE"),
-            category=tx.get("category", "Miscellaneous & Other"),
-        )
+    with db_transaction.atomic():
+        Transaction.objects.filter(statement=statement_instance).delete()
+        statement_instance.ai_evaluation = data.get("ai_evaluation", "")
+        statement_instance.is_processed = True
+        statement_instance.save(update_fields=["ai_evaluation", "is_processed"])
+
+        Transaction.objects.bulk_create([
+            Transaction(
+                statement=statement_instance,
+                date=tx.get("date"),
+                amount=tx.get("amount", 0.0),
+                payee_payer=tx.get("payee_payer", ""),
+                description=tx.get("description", ""),
+                transaction_type=tx.get("transaction_type", "FEE_CHARGE"),
+                category=tx.get("category", "Miscellaneous & Other"),
+            )
+            for tx in transactions_data
+        ])
 
     return statement_instance

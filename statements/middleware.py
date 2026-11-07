@@ -1,10 +1,12 @@
 import json
 import hashlib
 import hmac
+import logging
 import math
 import time
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.http import JsonResponse
 from rest_framework.throttling import BaseThrottle
@@ -12,13 +14,81 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.settings import api_settings as jwt_api_settings
 from rest_framework_simplejwt.tokens import AccessToken
 
+from .audit import record_audit_event
+
+logger = logging.getLogger(__name__)
+
+
+class APIUsageTrackingMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if (
+            not settings.API_USAGE_TRACKING_ENABLED
+            or not request.path_info.startswith('/api/')
+        ):
+            return self.get_response(request)
+
+        started_at = time.monotonic()
+        try:
+            response = self.get_response(request)
+        except Exception:
+            self._record(request, 500, started_at)
+            raise
+
+        self._record(request, response.status_code, started_at)
+        return response
+
+    @staticmethod
+    def _record(request, status_code, started_at):
+        from .models import APIUsageRecord
+
+        try:
+            user = getattr(request, 'user', None)
+            user_state = getattr(user, '_state', None)
+            if (
+                not getattr(user, 'is_authenticated', False)
+                or getattr(user, 'pk', None) is None
+                or getattr(user_state, 'adding', False)
+            ):
+                user_id = APIRateLimitMiddleware._get_access_token_user_id(request)
+                user = None
+                if user_id is not None:
+                    user = get_user_model().objects.filter(pk=user_id).only('pk').first()
+
+            route = getattr(getattr(request, 'resolver_match', None), 'route', None)
+            endpoint = route or 'unmatched'
+            try:
+                request_size = max(0, int(request.META.get('CONTENT_LENGTH') or 0))
+            except (TypeError, ValueError):
+                request_size = 0
+
+            APIUsageRecord.objects.create(
+                user=user,
+                endpoint=endpoint[:255],
+                method=request.method[:10],
+                status_code=status_code,
+                duration_ms=max(0, int((time.monotonic() - started_at) * 1000)),
+                request_size_bytes=request_size,
+            )
+        except Exception:
+            logger.exception('Could not save API usage record for %s.', request.path_info)
+
 
 class APIRateLimitMiddleware:
     endpoint_rules = {
         ('POST', '/api/auth/register/'): ('registration', 'ip'),
+        ('POST', '/api/auth/register/confirm/'): ('registration_confirmation', 'ip'),
+        ('POST', '/api/auth/register/resend-confirmation/'): ('registration_confirmation', 'ip'),
         ('POST', '/api/auth/login/'): ('login', 'ip'),
         ('POST', '/api/auth/password-reset/'): ('password_reset', 'ip'),
         ('POST', '/api/auth/password-reset/confirm/'): ('password_reset_confirm', 'ip'),
+        ('POST', '/api/auth/login/2fa/'): ('two_factor_login', 'ip'),
+        ('POST', '/api/auth/2fa/setup/'): ('two_factor_management', 'user'),
+        ('POST', '/api/auth/2fa/enable/'): ('two_factor_management', 'user'),
+        ('POST', '/api/auth/2fa/disable/'): ('two_factor_management', 'user'),
+        ('POST', '/api/auth/2fa/recovery-codes/'): ('two_factor_management', 'user'),
         ('POST', '/api/statements/upload/'): ('upload', 'user'),
     }
 
@@ -29,6 +99,17 @@ class APIRateLimitMiddleware:
         if request.path_info.startswith('/api/'):
             limited_response = self._throttle_request(request)
             if limited_response is not None:
+                user_id = self._get_access_token_user_id(request)
+                actor = None
+                if user_id is not None:
+                    actor = get_user_model().objects.filter(pk=user_id).only('pk').first()
+                record_audit_event(
+                    'api.rate_limit.exceeded',
+                    request=request,
+                    actor=actor,
+                    outcome='failure',
+                    details={'status_code': limited_response.status_code},
+                )
                 return limited_response
 
         return self.get_response(request)
@@ -58,12 +139,19 @@ class APIRateLimitMiddleware:
             return response
 
         if scope == 'password_reset':
-            return self._check_password_reset_email_limit(request)
+            return self._check_email_limit(request, 'password_reset_email')
+        if (
+            scope == 'registration_confirmation'
+            and request.path_info.endswith('/resend-confirmation/')
+        ):
+            return self._check_email_limit(
+                request, 'registration_confirmation_email'
+            )
 
         return None
 
     @staticmethod
-    def _check_password_reset_email_limit(request):
+    def _check_email_limit(request, scope):
         if request.content_type != 'application/json':
             return None
 
@@ -79,7 +167,7 @@ class APIRateLimitMiddleware:
             return None
 
         return APIRateLimitMiddleware._check_limit(
-            'password_reset_email', f'email:{email.strip().casefold()}'
+            scope, f'email:{email.strip().casefold()}'
         )
 
     @staticmethod

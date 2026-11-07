@@ -71,11 +71,10 @@ cd statement_ai
 cp .env.example .env
 ```
 
-Then start the stack and apply the schema:
+Then start the stack. The one-off Compose migration service applies the schema before the API, worker, and cron services start:
 
 ```bash
 docker compose up -d --build
-docker compose exec web python manage.py migrate
 ```
 
 The API is exposed at:

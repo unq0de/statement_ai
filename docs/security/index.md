@@ -18,6 +18,14 @@ The project uses JWT authentication for protected endpoints. Requests without a 
 
 The system also uses access checks on file downloads and statement detail operations. For example, the original PDF file is only served if the current user owns the statement.
 
+## Optional two-factor authentication
+
+Users can optionally enroll in TOTP with an authenticator app. Setup requires the current password and a code from the app before 2FA is enabled. TOTP secrets are encrypted at rest; set a stable `TWO_FACTOR_ENCRYPTION_KEY` in production. If it is omitted, the encryption key is derived from `SECRET_KEY`, so rotating `SECRET_KEY` will require enrolled users to set up 2FA again.
+
+Password login for an enrolled user returns a five-minute, single-use challenge instead of JWTs. A valid TOTP or one-time recovery code is required before the API issues tokens. Recovery codes are stored as keyed hashes and can only be used once. TOTP time windows are checked for replay, and enabling or disabling 2FA revokes earlier JWTs through an authentication-version claim. The user must sign in again after either change.
+
+`TWO_FACTOR_ENABLED=0` disables the feature globally. The default is enabled, but users remain on password-only login until they enroll. Setup, disable, recovery-code regeneration, and challenge verification are rate-limited and audited. The API does not provide the QR-code UI; the external client should render `otpauth_url` and display recovery codes only once.
+
 ## Rate limiting
 
 Every request under `/api/` is rate-limited before authentication and permission checks. Global and endpoint quotas use atomic fixed-window counters in the configured cache. Anonymous requests are keyed by client IP; requests with a valid, unexpired access token are keyed by user ID. Failed-login counters expire 15 minutes after the first failure for that IP/username pair.
@@ -28,6 +36,8 @@ Every request under `/api/` is rate-limited before authentication and permission
 | Authenticated API request | 120 per minute | User ID |
 | `POST /api/auth/register/` | 5 per hour | Client IP |
 | `POST /api/auth/login/` | 10 per minute | Client IP |
+| `POST /api/auth/login/2fa/` | 10 per hour | Client IP |
+| 2FA setup, enable, disable, and recovery-code replacement | 10 per hour | User ID |
 | `POST /api/auth/password-reset/` | 5 per hour | Client IP |
 | Password reset email address | 3 per hour | Normalized email address |
 | `POST /api/auth/password-reset/confirm/` | 10 per hour | Client IP |

@@ -79,15 +79,9 @@ For local development, keep `DEBUG=1` as set in `.env.example`. If you set `DEBU
 docker compose up -d --build
 ```
 
-This starts the `web`, `cron`, and local Postgres services.
+This starts the web application, Celery worker, cron job, Redis, and local Postgres. A one-off `migrate` service applies pending migrations before the application services start. If a migration fails, the new services do not start.
 
-**4. Run migrations**
-
-```bash
-docker compose exec web python manage.py migrate
-```
-
-**5. Create an admin user** *(optional, for `/admin`)*
+**4. Create an admin user** *(optional, for `/admin`)*
 
 ```bash
 docker compose exec web python manage.py createsuperuser
@@ -170,11 +164,7 @@ Then fill in your own values in `.env`.
 sudo docker compose up -d --build
 ```
 
-**3. Run database migrations**
-
-```bash
-sudo docker compose exec web python manage.py migrate
-```
+Pending database migrations run automatically before the web, worker, and cron services start. If a migration fails, Compose does not start those services.
 
 The API is then available at `http://localhost:8001/api/`.
 
@@ -185,6 +175,17 @@ The API is then available at `http://localhost:8001/api/`.
 | `SECRET_KEY` | Django secret key | `django-insecure-...` |
 | `DEBUG` | `1` for development, `0` for production | `0` |
 | `GEMINI_API_KEY` | Your Google Gemini API key | `AI...` |
+| `TWO_FACTOR_ENABLED` | Enable optional TOTP 2FA support for users | `1` |
+| `TWO_FACTOR_ISSUER` | Issuer name displayed by authenticator apps | `Statement AI` |
+| `TWO_FACTOR_ENCRYPTION_KEY` | Stable Fernet key for TOTP secrets; if unset, derived from `SECRET_KEY` | Generated Fernet key |
+| `TWO_FACTOR_CHALLENGE_TIMEOUT_SECONDS` | Lifetime of a pending 2FA login challenge | `300` |
+| `TWO_FACTOR_MAX_CHALLENGE_ATTEMPTS` | Maximum verification attempts per challenge | `5` |
+| `TWO_FACTOR_RECOVERY_CODE_COUNT` | Number of one-time recovery codes created | `10` |
+| `CELERY_BROKER_URL` | Redis URL used by the background-processing worker | `redis://redis:6379/0` |
+| `API_USAGE_TRACKING_ENABLED` | Record API request and Gemini usage details | `1` |
+| `API_USAGE_RETENTION_DAYS` | Days to retain API and Gemini usage records | `90` |
+| `AUDIT_LOG_RETENTION_DAYS` | Days to retain security and data-change audit events | `365` |
+| `GEMINI_MONTHLY_LIMIT_PER_USER` | Maximum statement submissions per account per month; `0` disables the limit | `0` |
 | `DB_ENGINE` | `local` (default, docker Postgres) or `supabase` | `supabase` |
 | `POSTGRES_HOST` | PostgreSQL host (only used if `DB_ENGINE=local`) | `localhost` or `db` |
 | `POSTGRES_PORT` | PostgreSQL port (only used if `DB_ENGINE=local`) | `5432` |
@@ -205,7 +206,7 @@ The API is then available at `http://localhost:8001/api/`.
 
 ### Scheduled Data Retention Cleanup
 
-Bank statements older than `DATA_RETENTION_DAYS` are cleaned up automatically by a dedicated `cron` service in `docker-compose.yml`. It runs the same image as `web`, but only executes `manage.py delete_expired_data` on a daily schedule (`cron/statement-ai-cron`, default `03:00`) and otherwise stays idle.
+Bank statements older than `DATA_RETENTION_DAYS` and usage records older than `API_USAGE_RETENTION_DAYS` are cleaned up automatically by a dedicated `cron` service in `docker-compose.yml`. It runs the same image as `web`, but only executes `manage.py delete_expired_data` on a daily schedule (`cron/statement-ai-cron`, default `03:00`) and otherwise stays idle. API and Gemini usage records can be reviewed and filtered in Django admin.
 
 It starts automatically with:
 
@@ -274,11 +275,7 @@ docker compose up -d --build
 
 With `DB_ENGINE=supabase` set in `.env`, the local `db` service is skipped automatically — it only starts for `DB_ENGINE=local`, so there's no need to name `web`/`cron` explicitly anymore.
 
-**Run migrations**
-
-```bash
-docker compose exec web python manage.py migrate
-```
+Pending migrations are applied automatically by the one-off `migrate` service before the application starts.
 
 **Create an admin user** *(optional, for `/admin`)*
 
@@ -362,14 +359,22 @@ Authorization: Bearer <access_token>
 
 Once the access token expires, use the [refresh endpoint](#5-refresh-token) to obtain a new one without logging in again. All endpoints except registration, login, password reset, and token refresh require a valid access token — without one, the API responds with `401 Unauthorized`.
 
-Rate limits are applied before API permissions. Anonymous requests are limited to **60 per minute per IP address**; authenticated requests are limited to **120 per minute per user**. Registration and password-reset requests are limited to **5 per hour per IP**; reset emails are also limited to **3 per hour per normalized email address**. Login is limited to **10 per minute per IP**, password-reset confirmations to **10 per hour per IP**, and uploads to **5 per hour per user**. Five failed login attempts for the same IP address and username trigger a 15-minute cooldown. A successful login resets that counter. Exceeded limits return `429 Too Many Requests` with an `error` field and a `Retry-After` header.
+Rate limits are applied before API permissions. Anonymous requests are limited to **60 per minute per IP address**; authenticated requests are limited to **120 per minute per user**. Registration and password-reset requests are limited to **5 per hour per IP**; reset emails are also limited to **3 per hour per normalized email address**. Login is limited to **10 per minute per IP**, 2FA challenge verification to **10 per hour per IP**, 2FA management to **10 per hour per authenticated user**, password-reset confirmations to **10 per hour per IP**, and uploads to **5 per hour per user**. Five failed login attempts for the same IP address and username trigger a 15-minute cooldown. A successful login resets that counter. Exceeded limits return `429 Too Many Requests` with an `error` field and a `Retry-After` header.
 
 ### 2. Endpoints Overview
 
 | Method | Path | Auth Required | Description |
 |---|---|---|---|
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/register/` | No | Register a new user |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/register/confirm/` | No | Confirm a registration email |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/register/resend-confirmation/` | No | Resend a registration confirmation email |
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/login/` | No | Obtain access & refresh tokens |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/login/2fa/` | No | Complete login with a TOTP or recovery code |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/auth/2fa/` | Yes | Check two-factor status |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/2fa/setup/` | Yes | Start TOTP setup |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/2fa/enable/` | Yes | Confirm and enable TOTP |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/2fa/disable/` | Yes | Disable two-factor authentication |
+| ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/2fa/recovery-codes/` | Yes | Replace recovery codes |
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/password-reset/` | No | Request password reset instructions |
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/password-reset/confirm/` | No | Set a new password using a reset token |
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/auth/refresh/` | No (refresh token required) | Obtain a new access token |
@@ -378,6 +383,7 @@ Rate limits are applied before API permissions. Anonymous requests are limited t
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/` | Yes | List your own bank statements |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/<int:pk>/` | Yes | Retrieve a single bank statement including its transactions |
 | ![POST](https://img.shields.io/badge/POST-2ea44f?style=flat-square) | `/api/statements/upload/` | Yes | Upload a bank statement (PDF) & process it via AI |
+| ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/<int:pk>/status/` | Yes | Check PDF processing status |
 | ![GET](https://img.shields.io/badge/GET-0969da?style=flat-square) | `/api/statements/analytics/` | Yes | AI evaluations of all processed bank statements |
 | ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/delete-all/` | Yes | Delete all your own bank statements + transactions |
 | ![DELETE](https://img.shields.io/badge/DELETE-d73a49?style=flat-square) | `/api/statements/<int:pk>/` | Yes | Delete a single bank statement |
@@ -407,10 +413,10 @@ Creates a new user account.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `username` | string | Yes | Unique username |
-| `email` | string | No | Email address |
-| `password` | string | Yes | At least 12 characters; not too similar to account details, a common password, or entirely numeric |
+| `email` | string | Yes | Email address |
+| `password` | string | Yes | Must meet the password policy configured in the environment |
 
-Passphrases are accepted; a specific mix of character types is not required.
+The account remains inactive until the confirmation link sent by email is used. Password policy is configured with `PASSWORD_MIN_LENGTH`, `PASSWORD_CHECK_USER_ATTRIBUTES`, `PASSWORD_CHECK_COMMON`, `PASSWORD_CHECK_NUMERIC`, and `PASSWORD_CHECK_SPECIAL_CHARACTERS`. Passphrases are accepted; a specific mix of character types is not otherwise required.
 Existing accounts whose correct password does not meet the current rules must reset it before receiving new JWTs.
 
 **Response `201 Created`**
@@ -421,6 +427,22 @@ Existing accounts whose correct password does not meet the current rules must re
   "email": "john@example.com"
 }
 ```
+
+Confirm the address by submitting the `uid` and `token` from the email link:
+
+```http
+POST /api/auth/register/confirm/
+Content-Type: application/json
+```
+
+```json
+{
+  "uid": "MQ",
+  "token": "<one_time_token>"
+}
+```
+
+Request another message with `POST /api/auth/register/resend-confirmation/` and `{"email":"john@example.com"}`. The response does not reveal whether the address has an unconfirmed account. Configure SMTP and the HTTPS `REGISTRATION_CONFIRMATION_URL`; in development, messages are written to the web container console. Set `EMAIL_USE_HTML_TEMPLATES=1` to include the editable HTML version; the text version remains available as a fallback.
 
 **Error Cases**
 
@@ -460,6 +482,18 @@ Exchanges username + password for a token pair.
   "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
+
+If the account has enabled 2FA, login returns a short-lived challenge instead of tokens:
+
+```json
+{
+  "mfa_required": true,
+  "challenge": "<one_time_challenge>",
+  "expires_in": 300
+}
+```
+
+Complete the challenge by posting either an authenticator code or an unused recovery code to `POST /api/auth/login/2fa/`. The response then contains the normal `access` and `refresh` tokens.
 
 **Error Cases**
 
@@ -539,7 +573,7 @@ Issues a new access token from a valid refresh token.
 <details>
 <summary><b>6. Upload a Bank Statement</b></summary>
 
-Uploads a PDF file, has it analyzed by Gemini AI, and automatically saves the detected transactions to the database. This request can take a few seconds depending on file size, since it waits synchronously for the AI response.
+Uploads a PDF file and queues Gemini analysis in the background. The upload returns a statement ID and a status URL; detected transactions appear after processing completes.
 
 **Endpoint:** `POST /api/statements/upload/` · **Auth:** required · **Content-Type:** `multipart/form-data`
 
@@ -563,17 +597,18 @@ curl -X POST http://localhost:8000/api/statements/upload/ \
   -F "file=@statement_july.pdf"
 ```
 
-**Response `201 Created`**
+**Response `202 Accepted`**
 
 ```json
 {
-  "message": "Bank statement processed successfully.",
+  "message": "Bank statement accepted for processing.",
   "statement_id": 14,
-  "ai_evaluation": "Your finances look healthy this month, with your salary of $3,200.00 comfortably covering your regular expenses. Most of your spending went toward Housing & Utilities and Groceries & Food. Keep an eye on your subscriptions, as they're adding up steadily each month."
+  "processing_status": "pending",
+  "status_url": "/api/statements/14/status/"
 }
 ```
 
-The individually detected transactions are **not** included directly in this response — retrieve them afterwards via [`GET /api/transactions/`](#10-list-transactions).
+Poll the status URL until `processing_status` is `completed` or `failed`. A completed status includes the evaluation; retrieve detected transactions via [`GET /api/transactions/`](#10-list-transactions).
 
 **Error Cases**
 
@@ -581,7 +616,7 @@ The individually detected transactions are **not** included directly in this res
 |---|---|
 | `400 Bad Request` | No file sent, wrong file type, or file > 10 MB |
 | `401 Unauthorized` | Missing/invalid access token |
-| `500 Internal Server Error` | AI processing failed (e.g. unreadable PDF). In this case the bank statement is automatically deleted again, so no incomplete records are left behind. |
+| `503 Service Unavailable` | The processing queue could not accept the job. The stored statement is marked `failed`. |
 
 ```json
 { "error": "No file uploaded (field 'file' is required)." }
