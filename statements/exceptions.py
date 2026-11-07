@@ -3,6 +3,7 @@ import logging
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404
 from rest_framework import status
+from rest_framework.exceptions import Throttled
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
@@ -30,6 +31,8 @@ def custom_exception_handler(exc, context):
     # InvalidToken/TokenError, etc.) first.
     response = drf_exception_handler(exc, context)
     if response is not None:
+        if isinstance(exc, Throttled):
+            response.data = {"error": str(exc.detail)}
         return response
 
     # A `<Model>.DoesNotExist` (e.g. raised by simplejwt when the user

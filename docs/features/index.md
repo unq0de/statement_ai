@@ -6,122 +6,122 @@ permalink: /features/
 
 # Features
 
-This project includes a focused set of real features that are available in the current codebase. The main goal is to automate common manual work around PDF bank statements and personal finance tracking.
+This page describes what the current code does, area by area. For the exact request and response formats, see the [API reference]({{ '/api-reference/' | relative_url }}). For how the pieces fit together, see [Architecture]({{ '/architecture/' | relative_url }}).
 
-## User registration and authentication
+## Accounts and registration
 
-The API uses Django's default user model together with Django REST Framework simple JWT. Users can create an account with a username, email, and password. The service validates password strength using Django's built-in password validators.
+The API uses Django's default user model. A user registers with a username, email address and password. The new account is inactive: it cannot log in until the one-time link in the confirmation email has been used. The link points to a page of your own client application (`REGISTRATION_CONFIRMATION_URL`) and carries `uid` and `token` in the URL fragment, which browsers do not send in HTTP requests. The client reads them and posts them to the confirm endpoint. Links are valid for one hour by default and can be used once.
 
-After registration, users log in through the token endpoint. The login response contains both `access` and `refresh` tokens.
+If the email never arrives, a resend endpoint issues a new link. It answers identically whether or not an unconfirmed account exists for the address, so it cannot be used to find out who is registered. If sending the email fails, the failure is logged but the client still gets a success response.
 
-## Statement uploads
+## Login and tokens
 
-Authenticated users can upload a PDF statement through the upload endpoint:
+Login exchanges username and password for an `access` token (60 minutes) and a `refresh` token (1 day). The refresh endpoint returns a new access token and does not rotate the refresh token.
 
-```http
-POST /api/statements/upload/
-```
+Tokens can be revoked in two ways. They carry a hash of the user's password, so a password change or reset invalidates every token the user holds. They also carry an `auth_version` number that is increased when two-factor authentication is enabled or disabled, which invalidates older tokens as well.
 
-The application checks the following before accepting the file:
+Accounts whose correct password no longer satisfies the current password policy are refused tokens and told to reset it. This applies a tightened policy to existing accounts without a migration, and such an attempt is not counted as a failed login.
 
-- the file field must be present
-- the uploaded object must be a PDF
-- the document must look like a real PDF header
-- the file must be smaller than 10 MB
+## Password policy
 
-Once a file passes validation, the project creates a `BankStatement` record for the authenticated user and stores the uploaded file in `media/statements/<year>/<month>/`.
+The policy is configurable through environment variables: minimum length (12 by default), similarity to username or email, common passwords, all-numeric passwords, and a requirement for at least one punctuation mark or symbol. There is no required mix of upper-case, lower-case and digits, so long passphrases work. See [Configuration]({{ '/configuration/' | relative_url }}) for the variable names.
 
-## PDF validation and processing
+## Password reset
 
-The backend performs file validation before it saves or processes a document. It only accepts PDF uploads and rejects anything that is clearly not a valid PDF, including malformed content and oversized uploads.
+A reset request always returns the same message, whether or not an active account uses the address. If exactly one active account matches, an email with a reset link is sent to `PASSWORD_RESET_URL`. The client sends `uid`, `token` and the new password to the confirm endpoint. The new password is checked against the policy, the token is single-use, and a successful reset invalidates all existing tokens. If `PASSWORD_RESET_URL` is empty, the email contains the `uid` and `token` values directly instead of a link.
 
-If the upload is valid, the project sends the file to Google Gemini for a structured extraction pass. The processing result is stored in the same `BankStatement` record.
+## Optional two-factor authentication
 
-## AI transaction extraction
+Users can protect their account with a TOTP authenticator app. Enrollment has three steps:
 
-The processing service calls Gemini with a prompt that defines:
+1. `POST /api/auth/2fa/setup/` with the password returns a secret and an `otpauth_url`. The client shows the URL as a QR code or the secret as text. The secret is pending and valid for twice the challenge timeout (10 minutes by default).
+2. The user adds it to an authenticator app.
+3. `POST /api/auth/2fa/enable/` with a first six-digit code activates 2FA and returns the recovery codes (10 by default). They are shown only this once; the server stores hashes.
 
-- language requirements
-- allowed categories
-- allowed transaction types
-- JSON output structure
-- the requirement that incoming and outgoing amounts be represented correctly
+From then on, a correct username and password do not return tokens. They return a short-lived, single-use challenge. The client completes the login with either a current TOTP code or an unused recovery code. A TOTP code is accepted within one 30-second step either side of the current one and can only be used once. A challenge is burned after `TWO_FACTOR_MAX_CHALLENGE_ATTEMPTS` wrong codes.
 
-The extracted result can include:
+TOTP secrets are encrypted with a Fernet key. Disabling 2FA and regenerating recovery codes require both the password and a current TOTP code. Enabling or disabling 2FA signs the user out everywhere, so log in again afterwards. If `TWO_FACTOR_ENABLED=0`, the whole feature is off and its endpoints return `404`. The API does not render QR codes; that is up to the client.
 
-- transaction date
-- payee or payer name
-- description
-- amount
-- transaction type
-- category
+## Statement upload
 
-The backend stores all extracted transactions in the `Transaction` model and links them directly to the statement.
+An authenticated user uploads a PDF to `POST /api/statements/upload/` as `multipart/form-data`. The field is called `file`; `document` is accepted as an alternative. The API checks, in this order:
 
-## AI-generated evaluation
+1. A file part is present.
+2. The declared content type is `application/pdf`, `application/octet-stream` or `binary/octet-stream`.
+3. The content looks like a PDF. It starts with `%PDF`, or the filename ends in `.pdf` and `%PDF` appears in the first 2 KB. Empty files fail.
+4. The size is at most 10 MB.
 
-Each processed statement stores a summary in `ai_evaluation`. This is generated by the AI processing step and saved as a text field on the `BankStatement` model.
+A passing file is saved under `media/statements/YYYY/MM/`, a `BankStatement` row is created with status `pending`, and a background job is queued. The response is `202 Accepted` with the statement ID and a status URL.
 
-The output is supposed to be a concise English evaluation of the user's financial position based on the uploaded statement and is returned in the statement payload and analytics endpoints.
+Uploads are limited to 5 per hour per user. An optional monthly cap, `GEMINI_MONTHLY_LIMIT_PER_USER`, limits how many statements one account can submit per calendar month. It counts the user's existing statements, whatever their status, so deleting one frees up quota. The cap is off by default and is meant to put a ceiling on Gemini costs.
 
-## Transactions and filtering
+## Background processing and status
 
-The project exposes transaction endpoints that allow users to inspect all of their own extracted transactions. Query parameters include:
+Extraction runs in a Celery worker, so a slow Gemini call never blocks an HTTP request. A statement moves through four states:
 
-- `statement_id`
-- `category`
-- `q` for free-text searching
-- `ordering` for date or amount sorting
+| Status | Meaning |
+| --- | --- |
+| `pending` | Accepted and queued. |
+| `processing` | A worker is working on it. The status stays here between automatic retries. |
+| `completed` | Transactions and evaluation are stored. |
+| `failed` | Processing gave up, or the job could not be queued. |
 
-This keeps transaction access fully scoped to the authenticated user, not to the broader database.
+Clients poll `GET /api/statements/<id>/status/`. If a job fails, it is retried up to three times with exponential backoff and jitter before the status becomes `failed`. Each attempt replaces the statement's transactions, so a retry cannot leave duplicates behind. If the worker dies mid-job, the job is delivered again rather than lost. The status response contains only a generic error message; the real exception is in the worker log and in the Gemini usage record. There is no endpoint to re-run a failed statement. Upload the file again.
 
-## Statement analytics
+## AI extraction and categorization
 
-The analytics route returns the AI evaluation values for all processed statements belonging to the current user:
+The worker sends the raw PDF and a prompt to Gemini. The prompt fixes:
 
-```http
-GET /api/statements/analytics/
-```
+- English output, regardless of the language of the PDF
+- the fifteen allowed categories and eight allowed transaction types
+- the JSON structure of the answer
+- negative amounts for outgoing payments and positive amounts for incoming ones
+- an evaluation of at most three sentences, written to the user as "you"
 
-It is also exposed as a compatibility alias:
+The reply is parsed as JSON and stored: the transactions replace any existing ones for that statement, and the evaluation is saved. Missing fields get defaults (type `FEE_CHARGE`, category `Miscellaneous & Other`, empty payee and description, amount `0`). The code does not check that Gemini's category and type values are on the allowed lists, so treat the lists as strongly expected rather than guaranteed. A transaction without a usable date makes the whole attempt fail.
 
-```http
-GET /api/analytics/
-```
+The model is `gemini-3.5-flash-lite`, set in `statements/services.py`.
 
-## File download and management
+## Transactions
 
-Users can:
+Transactions are read-only. `GET /api/transactions/` returns all of the user's transactions across statements and supports these query parameters:
 
-- list their statements
-- retrieve one statement with all transactions
-- download the original uploaded PDF
-- delete one statement
-- delete all statements in a single operation
+- `statement_id` to restrict the list to one statement
+- `category` for a case-insensitive exact match
+- `q` for a case-insensitive substring search over description, payee or payer, and category
+- `ordering` with `date`, `-date`, `amount` or `-amount` (default `-date`)
 
-The file download endpoint is intentionally protected so that files are only accessible to the owner of the data.
+`GET /api/transactions/<id>/` returns one transaction. Statements also return their transactions nested. There is no pagination; lists return everything that matches.
 
-## Data export and account deletion
+## Statement management and analytics
 
-The project supports two privacy operations:
+Users can list statements (filter by `processed`, sort by `uploaded_at`), fetch one with its transactions, download the original PDF, delete one statement, or delete all of them. Deleting removes the transactions and the stored PDF as well.
 
-- `GET /api/auth/export/` returns a JSON export of the user's data
-- `DELETE /api/auth/account/` permanently removes the user and their related statements, transactions, and uploaded files
+`GET /api/statements/analytics/`, also reachable at `/api/analytics/`, returns the AI evaluation of every processed statement. It does not compute totals or averages.
 
-These features line up with the repository's documented GDPR-focused retention and account-management workflow.
+## Privacy tools
 
-## Automatic cleanup
+- `GET /api/auth/export/` returns the user's profile and all statements with their transactions as JSON, with a download URL for each PDF.
+- `DELETE /api/auth/account/` deletes the user, all statements and transactions, and the stored PDFs. It requires the account password.
+- The nightly cleanup deletes statements older than `DATA_RETENTION_DAYS` and prunes the usage and audit tables. Details are on the [Security]({{ '/security/#retention-and-erasure' | relative_url }}) page.
 
-The project includes a cron job that deletes expired statements based on `DATA_RETENTION_DAYS`. This is configured in Docker Compose and implemented by the management command:
+## Abuse protection
 
-```bash
-python manage.py delete_expired_data
-```
+A middleware layer rate-limits requests per IP address or per user, with stricter limits on registration, login, password reset, 2FA and upload. Repeated failed logins for the same IP address and username trigger a 15-minute cooldown. The full table is on the [Configuration]({{ '/configuration/#rate-limits' | relative_url }}) page.
 
-The command removes statements where the upload timestamp exceeds the configured retention period.
+## Operator tools
+
+Three Django admin views, all read-only, help operators:
+
+- **API usage records**: route, method, status code, duration and request size. No request bodies, query strings or IP addresses are stored.
+- **Gemini usage records**: model, success or failure, token counts, duration and the error class name.
+- **Audit events**: security and data-changing actions such as logins, 2FA changes, uploads, processing outcomes, downloads, exports and deletions.
+
+Usage tracking can be switched off with `API_USAGE_TRACKING_ENABLED=0`. Each table has its own retention period.
 
 ## Related pages
 
 - [Getting started]({{ '/getting-started/' | relative_url }})
-- [Installation]({{ '/installation/' | relative_url }})
+- [Architecture]({{ '/architecture/' | relative_url }})
 - [API reference]({{ '/api-reference/' | relative_url }})
+- [Security]({{ '/security/' | relative_url }})

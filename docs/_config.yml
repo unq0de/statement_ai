@@ -12,7 +12,11 @@ header_pages:
   - index.md
   - getting-started/index.md
   - installation/index.md
+  - configuration/index.md
   - features/index.md
+  - architecture/index.md
   - api-reference/index.md
   - security/index.md
+  - development/index.md
+  - deployment/index.md
   - troubleshooting/index.md

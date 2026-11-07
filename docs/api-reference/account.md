@@ -6,7 +6,7 @@ permalink: /api-reference/account/
 
 # Account and privacy endpoints
 
-These endpoints cover user identity management and personal-data operations.
+These endpoints cover personal-data operations. Both require authentication.
 
 ## Export personal data
 
@@ -15,9 +15,14 @@ GET /api/auth/export/
 Authorization: Bearer <access_token>
 ```
 
-This returns a JSON document containing the authenticated user's information and the statements associated with the account. Each statement entry also includes a `file_download_url` that points to the protected file endpoint.
+Returns the authenticated user's profile and every statement with its transactions as one JSON document. PDFs are not embedded; each statement has a `file_download_url` pointing to the protected download endpoint.
 
-Example response:
+```bash
+curl http://localhost:8001/api/auth/export/ \
+  -H "Authorization: Bearer <access_token>"
+```
+
+`200 OK`:
 
 ```json
 {
@@ -31,6 +36,7 @@ Example response:
       "id": 1,
       "file": "/media/statements/2026/11/file.pdf",
       "uploaded_at": "2026-11-03T12:30:00Z",
+      "processing_status": "completed",
       "is_processed": true,
       "ai_evaluation": "You had a stable month...",
       "transactions": [],
@@ -40,7 +46,9 @@ Example response:
 }
 ```
 
-## Delete account
+The export covers profile data and statements. It does not include usage records, audit events or two-factor data. The `file` value is a relative media path and is only reachable when `DEBUG=1`; use `file_download_url` instead.
+
+## Delete the account
 
 ```http
 DELETE /api/auth/account/
@@ -48,18 +56,30 @@ Authorization: Bearer <access_token>
 Content-Type: application/json
 ```
 
-Request body:
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `password` | string | Yes | The current account password. |
 
-```json
-{
-  "password": "StrongPass123!"
-}
+```bash
+curl -X DELETE http://localhost:8001/api/auth/account/ \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"password":"StrongPass123!"}'
 ```
 
-This route confirms the current password before deleting the account. It removes the user record and deletes all associated statements, transactions, and uploaded files in the media directory.
+`200 OK`:
+
+```json
+{ "message": "Your account and all associated data were permanently deleted." }
+```
+
+`400` with `{"error": "Incorrect password."}` if the password is wrong.
+
+This deletes the user, all statements, all transactions and the stored PDF files, and it cannot be undone. Audit events about the deletion are kept, with their actor reference set to null. Deleting an account does not require a 2FA code.
 
 ## Related pages
 
 - [API overview]({{ '/api-reference/' | relative_url }})
-- [Statement endpoints](./statements.html)
-- [Transaction endpoints](./transactions.html)
+- [Authentication endpoints]({{ '/api-reference/authentication/' | relative_url }})
+- [Statement endpoints]({{ '/api-reference/statements/' | relative_url }})
+- [Security]({{ '/security/' | relative_url }})
