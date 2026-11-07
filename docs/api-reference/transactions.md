@@ -6,7 +6,7 @@ permalink: /api-reference/transactions/
 
 # Transaction endpoints
 
-The transaction routes expose the extracted entries tied to a user's bank statements.
+The transaction routes expose the entries Gemini extracted from the user's statements. Both routes require authentication and are read-only: transactions cannot be created, edited or deleted through the API. They disappear when their statement is deleted.
 
 ## List transactions
 
@@ -15,21 +15,25 @@ GET /api/transactions/
 Authorization: Bearer <access_token>
 ```
 
-Common filters:
+Returns transactions across all of the user's statements as a JSON array, without pagination.
 
-- `statement_id=<statement_id>`
-- `category=Groceries%20%26%20Food`
-- `q=coffee`
-- `ordering=-date` or `ordering=amount`
+| Query parameter | Description |
+| --- | --- |
+| `statement_id` | Only transactions of this statement. Pass an integer. |
+| `category` | Case-insensitive exact match, for example `Groceries & Food` (URL-encode it). |
+| `q` | Case-insensitive substring search over `description`, `payee_payer` and `category`. |
+| `ordering` | `date`, `-date`, `amount` or `-amount`. Default `-date`. Other values fall back to the default. |
 
-Example:
+Filters combine with AND.
 
 ```bash
-curl -H "Authorization: Bearer <token>" \
-  "http://localhost:8001/api/transactions/?statement_id=1&ordering=-date"
+curl -G http://localhost:8001/api/transactions/ \
+  -H "Authorization: Bearer <access_token>" \
+  --data-urlencode "category=Groceries & Food" \
+  --data-urlencode "ordering=amount"
 ```
 
-Example response:
+`200 OK`:
 
 ```json
 [
@@ -38,12 +42,14 @@ Example response:
     "date": "2026-10-05",
     "payee_payer": "Supermarket",
     "description": "Weekly groceries",
-    "amount": -65.4,
+    "amount": "-65.40",
     "transaction_type": "CARD_PAYMENT",
     "category": "Groceries & Food"
   }
 ]
 ```
+
+The `statement_id` filter is not validated. A non-numeric value will most likely cause a `500` (inferred from the code, not tested), so pass an integer.
 
 ## Retrieve one transaction
 
@@ -52,34 +58,28 @@ GET /api/transactions/<id>/
 Authorization: Bearer <access_token>
 ```
 
-Example response:
+Returns one transaction in the shape above. `404` if it does not exist or belongs to another user.
 
-```json
-{
-  "id": 12,
-  "date": "2026-10-05",
-  "payee_payer": "Supermarket",
-  "description": "Weekly groceries",
-  "amount": -65.4,
-  "transaction_type": "CARD_PAYMENT",
-  "category": "Groceries & Food"
-}
-```
-
-## Transaction data schema
+## Transaction fields
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `id` | integer | Primary key |
-| `date` | string | Transaction date in `YYYY-MM-DD` format |
-| `payee_payer` | string | Sender or recipient name |
-| `description` | string | Booking details or notes |
-| `amount` | number | Positive for income, negative for outgoing funds |
-| `transaction_type` | string | One of the allowed transaction type values |
-| `category` | string | One of the configured AI categories |
+| `id` | integer | Primary key. |
+| `date` | string | Booking date, `YYYY-MM-DD`. |
+| `payee_payer` | string | Counterparty name. May be empty. |
+| `description` | string | Short English description of the booking. |
+| `amount` | string | Decimal with two places. Negative for outgoing money, positive for incoming. |
+| `transaction_type` | string | One of the values below. |
+| `category` | string | One of the categories below. |
+
+**Transaction types:** `INCOME`, `TRANSFER_OUT`, `TRANSFER_IN`, `DIRECT_DEBIT`, `STANDING_ORDER`, `CARD_PAYMENT`, `ATM_WITHDRAWAL`, `FEE_CHARGE`.
+
+**Categories:** `Housing & Utilities`, `Groceries & Food`, `Dining Out & Cafes`, `Transportation`, `Shopping & Retail`, `Subscriptions & Media`, `Health & Medical`, `Financial & Insurance`, `Salary & Main Income`, `Secondary Income`, `Transfers & P2P`, `Education & Childcare`, `Travel & Vacations`, `Cash & ATM`, `Miscellaneous & Other`.
+
+Both lists are defined in the Gemini prompt. The database does not enforce them, and the code does not re-check Gemini's answer against them, so treat them as strongly expected rather than guaranteed.
 
 ## Related pages
 
 - [API overview]({{ '/api-reference/' | relative_url }})
-- [Statement endpoints](./statements.html)
-- [Account and privacy endpoints](./account.html)
+- [Statement endpoints]({{ '/api-reference/statements/' | relative_url }})
+- [Account and privacy endpoints]({{ '/api-reference/account/' | relative_url }})

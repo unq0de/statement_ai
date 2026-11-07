@@ -6,272 +6,114 @@ permalink: /api-reference/
 
 # API Reference
 
-This documentation reflects the current Django REST API in this repository. The local service runs on `http://localhost:8001/api/` by default when started with Docker Compose.
+This reference describes the REST API as implemented in this repository. The repository has no OpenAPI or Swagger specification, so these pages are the reference. The detailed endpoint descriptions are split across four pages:
+
+- [Authentication endpoints]({{ '/api-reference/authentication/' | relative_url }}): registration, login, 2FA, token refresh, password reset
+- [Statement endpoints]({{ '/api-reference/statements/' | relative_url }}): upload, status, list, download, delete, analytics
+- [Transaction endpoints]({{ '/api-reference/transactions/' | relative_url }}): list, filter and read transactions
+- [Account and privacy endpoints]({{ '/api-reference/account/' | relative_url }}): data export and account deletion
+
+This page covers what applies everywhere: base URL, authentication, conventions, error formats, status codes and the endpoint overview.
 
 ## Base URL and format
 
-- Base URL: `http://localhost:8001/api/`
-- Format: JSON for most endpoints
-- File upload: `multipart/form-data`
+- Base URL with Docker Compose: `http://localhost:8001/api/`
+- Format: JSON, except the upload endpoint, which uses `multipart/form-data`
 - Authentication: JWT bearer token
+- Versioning: none. All routes are unversioned.
 
 ## Authentication
 
-The application uses `djangorestframework-simplejwt` for authentication. After a successful login, the API returns an `access` token and a `refresh` token.
-
-Send the `access` token in the `Authorization` header for every protected request:
+The API uses `djangorestframework-simplejwt`. A successful login returns an `access` and a `refresh` token. Send the access token on every protected request:
 
 ```http
 Authorization: Bearer <access_token>
 ```
-
-The default token lifetimes are:
 
 | Token | Lifetime |
 | --- | --- |
 | Access token | 60 minutes |
 | Refresh token | 1 day |
 
-If the access token expires, use `POST /api/auth/refresh/` to create a new access token.
+When the access token expires, call `POST /api/auth/refresh/`. Tokens stop working earlier if the user changes or resets the password, or enables or disables two-factor authentication. A request without a valid token to a protected endpoint returns `401 Unauthorized`.
+
+## Conventions
+
+**Ownership.** Statements and transactions are always filtered to the authenticated user. Requesting another user's resource returns `404`, exactly like a missing one.
+
+**Pagination.** There is none. List endpoints return a plain JSON array with everything that matches.
+
+**Amounts.** `amount` is a decimal serialized as a string with two decimal places, for example `"-65.40"`.
+
+**Methods.** Other HTTP methods on the routes below return `405 Method Not Allowed`. There are no endpoints to create, edit or delete individual transactions.
+
+## Errors
+
+Errors have several shapes, depending on where they originate:
+
+| Source | Shape | Example |
+| --- | --- | --- |
+| Statement AI views and rate limiting | `{"error": "message"}` | `{"error": "Rate limit exceeded."}` |
+| DRF authentication and permission checks | `{"detail": "message"}` | `{"detail": "Authentication credentials were not provided."}` |
+| SimpleJWT token errors | `{"detail": "...", "code": "token_not_valid", "messages": [...]}` | |
+| Serializer validation | field name mapped to a list of messages | `{"password": ["This password is too common."]}` |
+| Unexpected exceptions | `{"error": "An unexpected server error occurred."}` with status `500` | |
+
+A project-wide exception handler (`statements/exceptions.py`) converts DRF throttling errors to the `{"error": ...}` shape, and turns an unhandled "object does not exist" error, for example a token for a deleted user, into `401` with `{"error": "Invalid or expired token."}`. Any other unhandled exception is logged with its traceback and returned as the generic `500` message, without internal details.
+
+## Status codes
+
+| Status | Meaning |
+| --- | --- |
+| `200` | Success |
+| `201` | Account created |
+| `202` | Statement accepted for background processing |
+| `400` | Validation failed or input was rejected |
+| `401` | Missing, invalid, expired or revoked token; wrong credentials |
+| `404` | Not found, not yours, or the feature is unavailable (2FA turned off) |
+| `405` | Method not allowed on this route |
+| `409` | Conflict: 2FA is already enabled |
+| `429` | A rate limit or the monthly processing limit was reached. The response has a `Retry-After` header. |
+| `500` | Unexpected server error |
+| `503` | An upload could not be stored or queued |
 
 ## Rate limits
 
-Requests that exceed a limit receive `429 Too Many Requests` with an `error` field and a `Retry-After` header. API and endpoint quotas use fixed windows; the failed-login cooldown expires 15 minutes after the first failure for that IP address and username.
-
-| Request | Limit |
-| --- | --- |
-| Anonymous API request | 60 per minute per IP address |
-| Authenticated API request | 120 per minute per user |
-| `POST /api/auth/register/` | 5 per hour per IP address |
-| Registration confirmation requests | 10 per hour per IP address |
-| Registration confirmation email | 3 per hour per normalized email address |
-| `POST /api/auth/login/` | 10 per minute per IP address |
-| `POST /api/auth/login/2fa/` | 10 per hour per IP address |
-| 2FA setup, enable, disable, and recovery-code replacement | 10 per hour per authenticated user |
-| `POST /api/auth/password-reset/` | 5 per hour per IP address |
-| Password reset email address | 3 per hour per normalized email address |
-| `POST /api/auth/password-reset/confirm/` | 10 per hour per IP address |
-| Failed logins | 5 per 15 minutes per IP address and username |
-| `POST /api/statements/upload/` | 5 per hour per user |
+Requests over a limit receive `429 Too Many Requests`, an `error` field and a `Retry-After` header in seconds. Quotas use fixed windows. The full table, including per-endpoint limits and the failed-login cooldown, is on the [Configuration]({{ '/configuration/#rate-limits' | relative_url }}) page.
 
 ## Endpoint overview
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
-| `POST` | `/api/auth/register/` | No | Create a new user |
-| `POST` | `/api/auth/register/confirm/` | No | Confirm a registration email |
-| `POST` | `/api/auth/register/resend-confirmation/` | No | Resend a registration confirmation email |
-| `POST` | `/api/auth/login/` | No | Log in and receive JWT tokens |
-| `POST` | `/api/auth/login/2fa/` | No | Complete login with a TOTP or recovery code |
-| `GET` | `/api/auth/2fa/` | Yes | Check the current user's 2FA status |
-| `POST` | `/api/auth/2fa/setup/` | Yes | Start TOTP setup |
-| `POST` | `/api/auth/2fa/enable/` | Yes | Confirm and enable TOTP |
-| `POST` | `/api/auth/2fa/disable/` | Yes | Disable TOTP with password and current code |
-| `POST` | `/api/auth/2fa/recovery-codes/` | Yes | Replace one-time recovery codes |
-| `POST` | `/api/auth/password-reset/` | No | Request password reset instructions |
+| `POST` | `/api/auth/register/` | No | Create an inactive account and send a confirmation email |
+| `POST` | `/api/auth/register/confirm/` | No | Activate an account |
+| `POST` | `/api/auth/register/resend-confirmation/` | No | Resend the confirmation email |
+| `POST` | `/api/auth/login/` | No | Log in and receive tokens, or a 2FA challenge |
+| `POST` | `/api/auth/login/2fa/` | No | Complete a 2FA login with a TOTP or recovery code |
+| `POST` | `/api/auth/refresh/` | No | Get a new access token from a refresh token |
+| `POST` | `/api/auth/password-reset/` | No | Request a password reset email |
 | `POST` | `/api/auth/password-reset/confirm/` | No | Set a new password with a reset token |
-| `POST` | `/api/auth/refresh/` | No | Refresh an expired access token |
-| `DELETE` | `/api/auth/account/` | Yes | Delete the authenticated user's account |
-| `GET` | `/api/auth/export/` | Yes | Export all personal data for the user |
-| `GET` | `/api/statements/` | Yes | List the logged-in user's statements |
-| `POST` | `/api/statements/upload/` | Yes | Upload and process a PDF statement |
-| `GET` | `/api/statements/<id>/status/` | Yes | Check PDF processing status |
-| `GET` | `/api/statements/<id>/` | Yes | Retrieve a statement and its transactions |
-| `DELETE` | `/api/statements/<id>/` | Yes | Delete one statement and its file |
-| `GET` | `/api/statements/<id>/file/` | Yes | Download the original uploaded PDF |
-| `DELETE` | `/api/statements/delete-all/` | Yes | Delete every statement belonging to the user |
-| `GET` | `/api/statements/analytics/` | Yes | Return AI evaluations for processed statements |
-| `GET` | `/api/transactions/` | Yes | List the user's transactions |
+| `GET` | `/api/auth/2fa/` | Yes | Check 2FA status |
+| `POST` | `/api/auth/2fa/setup/` | Yes | Start TOTP enrollment |
+| `POST` | `/api/auth/2fa/enable/` | Yes | Confirm enrollment with a code |
+| `POST` | `/api/auth/2fa/disable/` | Yes | Turn 2FA off |
+| `POST` | `/api/auth/2fa/recovery-codes/` | Yes | Replace the recovery codes |
+| `GET` | `/api/auth/export/` | Yes | Export personal data as JSON |
+| `DELETE` | `/api/auth/account/` | Yes | Delete the account and all its data |
+| `POST` | `/api/statements/upload/` | Yes | Upload a PDF and queue it for processing |
+| `GET` | `/api/statements/` | Yes | List statements with their transactions |
+| `GET` | `/api/statements/<id>/` | Yes | Retrieve one statement |
+| `GET` | `/api/statements/<id>/status/` | Yes | Check processing status |
+| `GET` | `/api/statements/<id>/file/` | Yes | Download the original PDF |
+| `DELETE` | `/api/statements/<id>/` | Yes | Delete one statement |
+| `DELETE` | `/api/statements/delete-all/` | Yes | Delete all of the user's statements |
+| `GET` | `/api/statements/analytics/` | Yes | AI evaluations of processed statements |
+| `GET` | `/api/analytics/` | Yes | Alias of the analytics endpoint |
+| `GET` | `/api/transactions/` | Yes | List, filter and search transactions |
 | `GET` | `/api/transactions/<id>/` | Yes | Retrieve one transaction |
-| `GET` | `/api/analytics/` | Yes | Compatibility alias for analytics |
-
-## Auth flows
-
-### Register a user
-
-```http
-POST /api/auth/register/
-Content-Type: application/json
-```
-
-```json
-{
-  "username": "alice",
-  "email": "alice@example.com",
-  "password": "StrongPass123!"
-}
-```
-
-Response:
-
-```json
-{
-  "username": "alice",
-  "email": "alice@example.com"
-}
-```
-
-The API creates the account as inactive and sends a confirmation email. The user can log in after confirming the email. Registration is limited to five requests per hour per IP address. Requests above this limit receive `429 Too Many Requests` until the limit window resets.
-
-The minimum length and checks for common passwords, similarity to account details, all-numeric values, and at least one punctuation mark or symbol are configurable through `PASSWORD_MIN_LENGTH`, `PASSWORD_CHECK_COMMON`, `PASSWORD_CHECK_USER_ATTRIBUTES`, `PASSWORD_CHECK_NUMERIC`, and `PASSWORD_CHECK_SPECIAL_CHARACTERS`. Passphrases are accepted; a specific mix of character types is not otherwise required.
-
-### Confirm a registration email
-
-The confirmation email links to the client page configured by `REGISTRATION_CONFIRMATION_URL`. The client reads `uid` and `token` from the URL fragment and submits them to:
-
-```http
-POST /api/auth/register/confirm/
-Content-Type: application/json
-```
-
-```json
-{
-  "uid": "MQ",
-  "token": "<one_time_token>"
-}
-```
-
-The response is `200 OK` when the account is activated. Confirmation links expire according to `PASSWORD_RESET_TIMEOUT` and cannot be reused.
-
-To request another link, submit the email address to `POST /api/auth/register/resend-confirmation/`. This endpoint returns the same response whether or not an unconfirmed account uses the address.
-
-### Log in
-
-```http
-POST /api/auth/login/
-Content-Type: application/json
-```
-
-```json
-{
-  "username": "alice",
-  "password": "StrongPass123!"
-}
-```
-
-Response:
-
-```json
-{
-  "refresh": "<refresh_token>",
-  "access": "<access_token>"
-}
-```
-
-If the account has enabled two-factor authentication, this endpoint instead returns a short-lived challenge and does not issue tokens yet:
-
-```json
-{
-  "mfa_required": true,
-  "challenge": "<one_time_challenge>",
-  "expires_in": 300
-}
-```
-
-### Optional two-factor authentication
-
-Users enable TOTP individually. First start setup with a password recheck:
-
-```http
-POST /api/auth/2fa/setup/
-Authorization: Bearer <access_token>
-Content-Type: application/json
-```
-
-```json
-{"password": "StrongPass123!"}
-```
-
-The response contains a `secret` and `otpauth_url`. The external client can render the URL as a QR code. The secret is returned only during setup and is encrypted at rest. Confirm setup with a current authenticator code:
-
-```http
-POST /api/auth/2fa/enable/
-Authorization: Bearer <access_token>
-Content-Type: application/json
-```
-
-```json
-{"code": "123456"}
-```
-
-The response includes one-time recovery codes. Store them securely; they are shown only once. To replace them later, submit the account password and a current TOTP code to `POST /api/auth/2fa/recovery-codes/`.
-
-Complete a password login challenge with either a TOTP or an unused recovery code:
-
-```http
-POST /api/auth/login/2fa/
-Content-Type: application/json
-```
-
-```json
-{"challenge": "<one_time_challenge>", "code": "123456"}
-```
-
-On success, this returns the normal `access` and `refresh` tokens. Challenges expire after `TWO_FACTOR_CHALLENGE_TIMEOUT_SECONDS`, allow a limited number of attempts, and can be used once. Enabling or disabling 2FA revokes tokens issued earlier. To disable it, submit both the password and a current TOTP code to `POST /api/auth/2fa/disable/`.
-
-`TWO_FACTOR_ENABLED=0` disables 2FA endpoints globally. The per-user setting is independent; when global support is enabled, users who have not enrolled keep the normal password-only login.
-
-### Refresh a token
-
-```http
-POST /api/auth/refresh/
-Content-Type: application/json
-```
-
-```json
-{
-  "refresh": "<refresh_token>"
-}
-```
-
-Response:
-
-```json
-{
-  "access": "<new_access_token>"
-}
-```
-
-### Request a password reset
-
-```http
-POST /api/auth/password-reset/
-Content-Type: application/json
-```
-
-```json
-{
-  "email": "alice@example.com"
-}
-```
-
-The API always returns the same `200 OK` message, whether or not an active account uses the address. If exactly one active account matches, the email contains a one-time token and a link to the configured client reset page. The client should read `uid` and `token` from the URL fragment and remove the fragment from the address bar before loading third-party resources.
-
-### Confirm a password reset
-
-```http
-POST /api/auth/password-reset/confirm/
-Content-Type: application/json
-```
-
-```json
-{
-  "uid": "MQ",
-  "token": "<one_time_token>",
-  "new_password": "A-long-passphrase-2026"
-}
-```
-
-The token expires after one hour by default, can be used once, and is invalidated as soon as the password changes. A successful reset revokes existing access and refresh tokens. Invalid or expired links and passwords that fail the password checks receive `400 Bad Request`.
-
-## Notes on permissions
-
-All endpoints except registration, registration confirmation, confirmation resend, login, password reset, and token refresh are protected by the default authentication class. A request without a valid token returns `401 Unauthorized`.
 
 ## Related pages
 
-- [Statement endpoints](./statements.html)
-- [Transaction endpoints](./transactions.html)
-- [Account and privacy endpoints](./account.html)
-- [Installation guide](../installation/)
-- [Security overview](../security/)
+- [Getting started]({{ '/getting-started/' | relative_url }})
+- [Architecture]({{ '/architecture/' | relative_url }})
+- [Security]({{ '/security/' | relative_url }})
