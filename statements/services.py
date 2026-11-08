@@ -9,6 +9,25 @@ from .models import BankStatement, GeminiUsageRecord, Transaction
 
 logger = logging.getLogger(__name__)
 
+# Allowed transaction categories and types - must match Gemini prompt
+ALLOWED_CATEGORIES = {
+    "Housing & Utilities",
+    "Groceries & Food",
+    "Dining Out & Cafes",
+    "Transportation",
+    "Shopping & Retail",
+    "Subscriptions & Media",
+    "Health & Medical",
+    "Financial & Insurance",
+    "Salary & Main Income",
+    "Secondary Income",
+    "Transfers & P2P",
+    "Education & Childcare",
+    "Travel & Vacations",
+    "Cash & ATM",
+    "Miscellaneous & Other",
+}
+
 try:
     from google import genai as google_genai
     from google.genai import types
@@ -118,7 +137,7 @@ def process_pdf_statement_with_gemini(statement_instance):
     Note for amount: Outgoing payments MUST be negative numbers (e.g. -12.50). Incoming payments MUST be positive numbers (e.g. 1500.00).
     """
 
-    model_name = 'gemini-3.5-flash-lite'
+    model_name = settings.GEMINI_MODEL
     started_at = time.monotonic()
     try:
         response = client.models.generate_content(
@@ -160,23 +179,73 @@ def process_pdf_statement_with_gemini(statement_instance):
     data = json.loads(response_text.strip())
 
     transactions_data = data.get("transactions", [])
+    
+    # Validate transaction data for financial accuracy
+    validated_transactions = []
+    for i, tx in enumerate(transactions_data):
+        # Validate required fields
+        if not tx.get("date"):
+            logger.warning(
+                'Skipping transaction %d in statement %s: missing required field "date".',
+                i, statement_instance.pk
+            )
+            continue
+        if tx.get("amount") is None or tx.get("amount") == "":
+            logger.warning(
+                'Skipping transaction %d in statement %s: missing required field "amount".',
+                i, statement_instance.pk
+            )
+            continue
+        
+        # Validate types and format
+        try:
+            # Ensure amount can be converted to Decimal
+            amount_value = float(tx.get("amount"))
+        except (ValueError, TypeError):
+            logger.warning(
+                'Skipping transaction %d in statement %s: invalid amount format "%s".',
+                i, statement_instance.pk, tx.get("amount")
+            )
+            continue
+        
+        # Validate transaction type
+        valid_types = dict(Transaction.TYPE_CHOICES)
+        tx_type = tx.get("transaction_type", "FEE_CHARGE")
+        if tx_type not in valid_types:
+            logger.warning(
+                'Skipping transaction %d in statement %s: invalid transaction_type "%s".',
+                i, statement_instance.pk, tx_type
+            )
+            continue
+        
+        # Validate category (warn but don't skip - use default)
+        category = tx.get("category", "Miscellaneous & Other")
+        if category not in ALLOWED_CATEGORIES:
+            logger.warning(
+                'Transaction %d in statement %s has category "%s" not in allowed list. Using default.',
+                i, statement_instance.pk, category
+            )
+            category = "Miscellaneous & Other"
+        
+        validated_transactions.append(
+            Transaction(
+                statement=statement_instance,
+                date=tx.get("date"),
+                amount=amount_value,
+                payee_payer=tx.get("payee_payer", ""),
+                description=tx.get("description", ""),
+                transaction_type=tx_type,
+                category=category,
+            )
+        )
+    
     with db_transaction.atomic():
         Transaction.objects.filter(statement=statement_instance).delete()
         statement_instance.ai_evaluation = data.get("ai_evaluation", "")
         statement_instance.is_processed = True
         statement_instance.save(update_fields=["ai_evaluation", "is_processed"])
 
-        Transaction.objects.bulk_create([
-            Transaction(
-                statement=statement_instance,
-                date=tx.get("date"),
-                amount=tx.get("amount", 0.0),
-                payee_payer=tx.get("payee_payer", ""),
-                description=tx.get("description", ""),
-                transaction_type=tx.get("transaction_type", "FEE_CHARGE"),
-                category=tx.get("category", "Miscellaneous & Other"),
-            )
-            for tx in transactions_data
-        ])
+        if validated_transactions:
+            Transaction.objects.bulk_create(validated_transactions)
 
     return statement_instance

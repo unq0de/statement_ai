@@ -156,7 +156,7 @@ Run the last command in a second terminal. The default `POSTGRES_HOST` is `db`, 
 
 ## Runtime notes
 
-- `web` runs `manage.py runserver 0.0.0.0:8001`, Django's development server.
+- `web` runs gunicorn (`statement_ai.wsgi:application`) on port `8001`. With `GUNICORN_EXTRA_ARGS=--reload` from `.env.example` it reloads on code changes.
 - `worker` runs `celery -A statement_ai worker --loglevel=INFO --concurrency=2` as user `nobody`.
 - The project directory is bind-mounted into the containers, so code changes show up without a rebuild. The worker does not reload by itself; run `docker compose restart worker` after changing task or service code.
 - Uploaded PDFs are stored in the `media_data` volume, mounted at `/app/media`.

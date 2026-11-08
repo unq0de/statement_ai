@@ -17,6 +17,7 @@ Boolean settings accept `1`, `true`, `yes` or `on` (case-insensitive) as true. A
 | `SECRET_KEY` | none | Django secret key. Required when `DEBUG` is off. It also keys the HMACs behind recovery codes and rate-limit identities, so rotating it invalidates existing recovery codes. |
 | `DEBUG` | `0` | `1` is development mode: every host and CORS origin is allowed, emails go to the console, and Django serves `/media/`. Compose passes `DEBUG` without a default, so set it explicitly. |
 | `GEMINI_API_KEY` | none | Required when `DEBUG` is off. Processing fails without it. |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` | Gemini model used for statement extraction. |
 | `ALLOWED_HOSTS` | empty | Comma-separated hostnames. Only read when `DEBUG=0`. An empty value makes Django reject every request. |
 | `CORS_ALLOWED_ORIGINS` | empty | Comma-separated origins. Only read when `DEBUG=0`. |
 | `NUM_PROXIES` | `0` | Number of trusted reverse proxies in front of the API. At `0` the connection's remote address is used and `X-Forwarded-For` is ignored. |
@@ -28,6 +29,16 @@ Boolean settings accept `1`, `true`, `yes` or `on` (case-insensitive) as true. A
 | --- | --- | --- |
 | `REDIS_URL` | none (Compose: `redis://redis:6379/1`) | Django cache, used for rate limits and failed-login counters. Required when `DEBUG=0`. If unset in development, an in-process cache is used. |
 | `CELERY_BROKER_URL` | `redis://redis:6379/0` | Celery broker. |
+
+## Web server
+
+The `web` container runs gunicorn. These variables are read by Docker Compose and the container start command, not by `statement_ai/settings.py`:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `GUNICORN_WORKERS` | `3` | Number of gunicorn worker processes. |
+| `GUNICORN_TIMEOUT` | `60` | Worker timeout in seconds. |
+| `GUNICORN_EXTRA_ARGS` | empty | Additional gunicorn arguments, e.g. `--reload` during development (the `.env.example` value). |
 
 ## Database
 
@@ -138,7 +149,6 @@ These are not configurable through the environment:
 
 | Value | Where |
 | --- | --- |
-| Gemini model `gemini-3.5-flash-lite` | `statements/services.py` |
 | Maximum upload size of 10 MB | `statements/views.py` |
 | Access token lifetime of 60 minutes, refresh token lifetime of 1 day | `SIMPLE_JWT` in `settings.py` |
 | Processing retries: 3, with exponential backoff and jitter | `statements/tasks.py` |

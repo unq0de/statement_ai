@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8001
+    command: sh -c "python manage.py collectstatic --noinput && exec gunicorn statement_ai.wsgi:application --bind 0.0.0.0:8001 --workers ${GUNICORN_WORKERS:-3} --timeout ${GUNICORN_TIMEOUT:-60} ${GUNICORN_EXTRA_ARGS:-}"
     volumes:
       - .:/app
       - media_data:/app/media
@@ -11,6 +11,7 @@ services:
       - DEBUG=${DEBUG}
       - SECRET_KEY=${SECRET_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}
       - API_USAGE_TRACKING_ENABLED=${API_USAGE_TRACKING_ENABLED:-1}
       - API_USAGE_RETENTION_DAYS=${API_USAGE_RETENTION_DAYS:-90}
       - AUDIT_LOG_RETENTION_DAYS=${AUDIT_LOG_RETENTION_DAYS:-365}
@@ -59,6 +60,12 @@ services:
       - SUPABASE_DB_USER=${SUPABASE_DB_USER:-}
       - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD:-}
       - SUPABASE_DB_SSLMODE=${SUPABASE_DB_SSLMODE:-require}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health/', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     depends_on:
       db:
         condition: service_healthy
@@ -106,6 +113,7 @@ services:
       - DEBUG=${DEBUG}
       - SECRET_KEY=${SECRET_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}
       - API_USAGE_TRACKING_ENABLED=${API_USAGE_TRACKING_ENABLED:-1}
       - API_USAGE_RETENTION_DAYS=${API_USAGE_RETENTION_DAYS:-90}
       - AUDIT_LOG_RETENTION_DAYS=${AUDIT_LOG_RETENTION_DAYS:-365}

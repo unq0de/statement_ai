@@ -106,7 +106,7 @@ Users can also erase data themselves. `DELETE /api/statements/<id>/` and `/api/s
 
 ## Known limitations
 
-- The Compose setup runs Django's development server. The repository does not include a production WSGI server.
+- The Compose setup serves the API with gunicorn over plain HTTP; TLS termination is left to a reverse proxy in front of it.
 - Compose publishes PostgreSQL on host port `5432`.
 - Statements, transactions and PDFs are not encrypted by the application.
 - Error responses use more than one JSON shape.

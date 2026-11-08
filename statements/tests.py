@@ -27,6 +27,49 @@ from .tasks import process_statement_task
 User = get_user_model()
 
 
+class HealthCheckTests(TestCase):
+    def test_health_check_returns_ok(self):
+        response = self.client.get('/health/')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['status'], 'ok')
+        self.assertEqual(payload['checks'], {'database': 'ok', 'cache': 'ok'})
+
+    def test_health_check_rejects_other_methods(self):
+        response = self.client.post('/health/')
+
+        self.assertEqual(response.status_code, 405)
+
+    # AdminEmailHandler.emit renders the error template, which breaks on the
+    # local Python 3.14 / Django 4.2 combination, so it is patched out.
+    @patch('django.utils.log.AdminEmailHandler.emit')
+    @patch('statements.views.connection')
+    def test_health_check_reports_database_failure(self, db_connection, _mail_emit):
+        db_connection.cursor.side_effect = RuntimeError('database down')
+
+        response = self.client.get('/health/')
+
+        self.assertEqual(response.status_code, 503)
+        payload = response.json()
+        self.assertEqual(payload['status'], 'error')
+        self.assertEqual(payload['checks']['database'], 'error')
+        self.assertEqual(payload['checks']['cache'], 'ok')
+
+    @patch('django.utils.log.AdminEmailHandler.emit')
+    @patch('statements.views.cache')
+    def test_health_check_reports_cache_failure(self, cache_client, _mail_emit):
+        cache_client.set.side_effect = RuntimeError('cache down')
+
+        response = self.client.get('/health/')
+
+        self.assertEqual(response.status_code, 503)
+        payload = response.json()
+        self.assertEqual(payload['status'], 'error')
+        self.assertEqual(payload['checks']['database'], 'ok')
+        self.assertEqual(payload['checks']['cache'], 'error')
+
+
 class StatementApiTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -944,6 +987,35 @@ class StatementApiTests(TestCase):
         self.assertGreaterEqual(usage.duration_ms, 0)
         from_bytes.assert_called_once()
 
+    @override_settings(GEMINI_MODEL='gemini-test-model')
+    @patch('statements.services.types.Part.from_bytes', return_value='pdf part')
+    @patch('statements.services._get_gemini_client')
+    def test_gemini_model_is_configurable(self, get_client, from_bytes):
+        response = SimpleNamespace(
+            text='{"ai_evaluation":"Summary","transactions":[]}',
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=1,
+                candidates_token_count=1,
+                total_token_count=2,
+            ),
+        )
+        get_client.return_value.models.generate_content.return_value = response
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                statement = BankStatement.objects.create(
+                    user=self.user,
+                    file=SimpleUploadedFile(
+                        'model.pdf', b'%PDF-1.4\n', content_type='application/pdf'
+                    ),
+                )
+                process_pdf_statement_with_gemini(statement)
+
+        call_kwargs = get_client.return_value.models.generate_content.call_args
+        self.assertEqual(call_kwargs.kwargs['model'], 'gemini-test-model')
+        usage = GeminiUsageRecord.objects.get(statement=statement)
+        self.assertEqual(usage.model_name, 'gemini-test-model')
+
     @patch('statements.services.types.Part.from_bytes', return_value='pdf part')
     @patch('statements.services._get_gemini_client')
     def test_failed_gemini_call_is_recorded(self, get_client, from_bytes):
@@ -967,7 +1039,151 @@ class StatementApiTests(TestCase):
         self.assertEqual(usage.error_type, 'TimeoutError')
         self.assertIsNone(usage.total_tokens)
 
-    def test_user_cannot_access_another_users_statement_status(self):
+    @patch('statements.services.types.Part.from_bytes', return_value='pdf part')
+    @patch('statements.services._get_gemini_client')
+    def test_gemini_response_with_valid_transactions(self, get_client, from_bytes):
+        response = SimpleNamespace(
+            text='{"ai_evaluation":"Summary","transactions":[{"date":"2024-01-15","amount":50.00,"payee_payer":"Store","description":"Purchase","transaction_type":"CARD_PAYMENT","category":"Shopping & Retail"}]}',
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=1,
+                candidates_token_count=1,
+                total_token_count=2,
+            ),
+        )
+        get_client.return_value.models.generate_content.return_value = response
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                statement = BankStatement.objects.create(
+                    user=self.user,
+                    file=SimpleUploadedFile(
+                        'valid.pdf', b'%PDF-1.4\n', content_type='application/pdf'
+                    ),
+                )
+                process_pdf_statement_with_gemini(statement)
+
+        statement.refresh_from_db()
+        self.assertTrue(statement.is_processed)
+        transactions = Transaction.objects.filter(statement=statement)
+        self.assertEqual(transactions.count(), 1)
+        tx = transactions.first()
+        self.assertEqual(tx.date, '2024-01-15')
+        self.assertEqual(float(tx.amount), 50.00)
+        self.assertEqual(tx.payee_payer, 'Store')
+
+    @patch('statements.services.types.Part.from_bytes', return_value='pdf part')
+    @patch('statements.services._get_gemini_client')
+    def test_gemini_response_skips_transactions_with_missing_date(self, get_client, from_bytes):
+        response = SimpleNamespace(
+            text='{"ai_evaluation":"Summary","transactions":[{"amount":50.00,"payee_payer":"Store","description":"Purchase","transaction_type":"CARD_PAYMENT","category":"Shopping & Retail"},{"date":"2024-01-15","amount":30.00,"payee_payer":"Other","description":"Valid","transaction_type":"CARD_PAYMENT","category":"Groceries & Food"}]}',
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=1,
+                candidates_token_count=1,
+                total_token_count=2,
+            ),
+        )
+        get_client.return_value.models.generate_content.return_value = response
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                statement = BankStatement.objects.create(
+                    user=self.user,
+                    file=SimpleUploadedFile(
+                        'missing_date.pdf', b'%PDF-1.4\n', content_type='application/pdf'
+                    ),
+                )
+                process_pdf_statement_with_gemini(statement)
+
+        # Only the transaction with date should be created
+        transactions = Transaction.objects.filter(statement=statement)
+        self.assertEqual(transactions.count(), 1)
+        self.assertEqual(float(transactions.first().amount), 30.00)
+
+    @patch('statements.services.types.Part.from_bytes', return_value='pdf part')
+    @patch('statements.services._get_gemini_client')
+    def test_gemini_response_skips_transactions_with_missing_amount(self, get_client, from_bytes):
+        response = SimpleNamespace(
+            text='{"ai_evaluation":"Summary","transactions":[{"date":"2024-01-15","payee_payer":"Store","description":"Purchase","transaction_type":"CARD_PAYMENT","category":"Shopping & Retail"},{"date":"2024-01-16","amount":30.00,"payee_payer":"Other","description":"Valid","transaction_type":"CARD_PAYMENT","category":"Groceries & Food"}]}',
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=1,
+                candidates_token_count=1,
+                total_token_count=2,
+            ),
+        )
+        get_client.return_value.models.generate_content.return_value = response
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                statement = BankStatement.objects.create(
+                    user=self.user,
+                    file=SimpleUploadedFile(
+                        'missing_amount.pdf', b'%PDF-1.4\n', content_type='application/pdf'
+                    ),
+                )
+                process_pdf_statement_with_gemini(statement)
+
+        # Only the transaction with amount should be created
+        transactions = Transaction.objects.filter(statement=statement)
+        self.assertEqual(transactions.count(), 1)
+        self.assertEqual(float(transactions.first().amount), 30.00)
+
+    @patch('statements.services.types.Part.from_bytes', return_value='pdf part')
+    @patch('statements.services._get_gemini_client')
+    def test_gemini_response_skips_transactions_with_invalid_amount(self, get_client, from_bytes):
+        response = SimpleNamespace(
+            text='{"ai_evaluation":"Summary","transactions":[{"date":"2024-01-15","amount":"not_a_number","payee_payer":"Store","description":"Purchase","transaction_type":"CARD_PAYMENT","category":"Shopping & Retail"},{"date":"2024-01-16","amount":30.00,"payee_payer":"Other","description":"Valid","transaction_type":"CARD_PAYMENT","category":"Groceries & Food"}]}',
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=1,
+                candidates_token_count=1,
+                total_token_count=2,
+            ),
+        )
+        get_client.return_value.models.generate_content.return_value = response
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                statement = BankStatement.objects.create(
+                    user=self.user,
+                    file=SimpleUploadedFile(
+                        'invalid_amount.pdf', b'%PDF-1.4\n', content_type='application/pdf'
+                    ),
+                )
+                process_pdf_statement_with_gemini(statement)
+
+        # Only the transaction with valid amount should be created
+        transactions = Transaction.objects.filter(statement=statement)
+        self.assertEqual(transactions.count(), 1)
+        self.assertEqual(float(transactions.first().amount), 30.00)
+
+    @patch('statements.services.types.Part.from_bytes', return_value='pdf part')
+    @patch('statements.services._get_gemini_client')
+    def test_gemini_response_skips_transactions_with_invalid_type(self, get_client, from_bytes):
+        response = SimpleNamespace(
+            text='{"ai_evaluation":"Summary","transactions":[{"date":"2024-01-15","amount":50.00,"payee_payer":"Store","description":"Purchase","transaction_type":"INVALID_TYPE","category":"Shopping & Retail"},{"date":"2024-01-16","amount":30.00,"payee_payer":"Other","description":"Valid","transaction_type":"CARD_PAYMENT","category":"Groceries & Food"}]}',
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=1,
+                candidates_token_count=1,
+                total_token_count=2,
+            ),
+        )
+        get_client.return_value.models.generate_content.return_value = response
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                statement = BankStatement.objects.create(
+                    user=self.user,
+                    file=SimpleUploadedFile(
+                        'invalid_type.pdf', b'%PDF-1.4\n', content_type='application/pdf'
+                    ),
+                )
+                process_pdf_statement_with_gemini(statement)
+
+        # Only the transaction with valid type should be created
+        transactions = Transaction.objects.filter(statement=statement)
+        self.assertEqual(transactions.count(), 1)
+        self.assertEqual(transactions.first().transaction_type, 'CARD_PAYMENT')
+
+
         self.authenticate()
         other_statement = BankStatement.objects.create(
             user=self.other_user,
@@ -1126,3 +1342,32 @@ class StatementApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['description'], 'Groceries')
+
+    @patch('statements.services.types.Part.from_bytes', return_value='pdf part')
+    @patch('statements.services._get_gemini_client')
+    def test_gemini_response_replaces_invalid_category_with_default(self, get_client, from_bytes):
+        response = SimpleNamespace(
+            text='{"ai_evaluation":"Summary","transactions":[{"date":"2024-01-15","amount":50.00,"payee_payer":"Store","description":"Purchase","transaction_type":"CARD_PAYMENT","category":"Invalid Category"}]}',
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=1,
+                candidates_token_count=1,
+                total_token_count=2,
+            ),
+        )
+        get_client.return_value.models.generate_content.return_value = response
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                statement = BankStatement.objects.create(
+                    user=self.user,
+                    file=SimpleUploadedFile(
+                        'invalid_category.pdf', b'%PDF-1.4\n', content_type='application/pdf'
+                    ),
+                )
+                process_pdf_statement_with_gemini(statement)
+
+        # Transaction should be created with default category
+        transactions = Transaction.objects.filter(statement=statement)
+        self.assertEqual(transactions.count(), 1)
+        self.assertEqual(transactions.first().category, 'Miscellaneous & Other')
+
