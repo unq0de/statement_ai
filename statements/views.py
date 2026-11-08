@@ -9,13 +9,16 @@ from cryptography.fernet import InvalidToken
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.models import User
-from django.db import transaction
+from django.core.cache import cache
+from django.db import connection, transaction
 from django.db.models import Q
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
@@ -91,6 +94,36 @@ def _is_valid_pdf_file(file_obj):
 # ------------------------------------------------------------------
 # Views
 # ------------------------------------------------------------------
+
+
+@csrf_exempt
+@require_GET
+def health_check(request):
+    """Health probe for load balancers and container health checks.
+
+    Mounted outside /api/, so usage tracking and rate limiting do not apply.
+    """
+    checks = {}
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+        checks['database'] = 'ok'
+    except Exception:
+        logger.exception('Health check database probe failed.')
+        checks['database'] = 'error'
+
+    try:
+        cache.set('health-check', 'ok', timeout=10)
+        checks['cache'] = 'ok' if cache.get('health-check') == 'ok' else 'error'
+    except Exception:
+        logger.exception('Health check cache probe failed.')
+        checks['cache'] = 'error'
+
+    healthy = all(value == 'ok' for value in checks.values())
+    return JsonResponse(
+        {'status': 'ok' if healthy else 'error', 'checks': checks},
+        status=200 if healthy else 503,
+    )
 
 
 class RegisterView(generics.CreateAPIView):

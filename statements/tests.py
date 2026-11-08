@@ -27,6 +27,49 @@ from .tasks import process_statement_task
 User = get_user_model()
 
 
+class HealthCheckTests(TestCase):
+    def test_health_check_returns_ok(self):
+        response = self.client.get('/health/')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['status'], 'ok')
+        self.assertEqual(payload['checks'], {'database': 'ok', 'cache': 'ok'})
+
+    def test_health_check_rejects_other_methods(self):
+        response = self.client.post('/health/')
+
+        self.assertEqual(response.status_code, 405)
+
+    # AdminEmailHandler.emit renders the error template, which breaks on the
+    # local Python 3.14 / Django 4.2 combination, so it is patched out.
+    @patch('django.utils.log.AdminEmailHandler.emit')
+    @patch('statements.views.connection')
+    def test_health_check_reports_database_failure(self, db_connection, _mail_emit):
+        db_connection.cursor.side_effect = RuntimeError('database down')
+
+        response = self.client.get('/health/')
+
+        self.assertEqual(response.status_code, 503)
+        payload = response.json()
+        self.assertEqual(payload['status'], 'error')
+        self.assertEqual(payload['checks']['database'], 'error')
+        self.assertEqual(payload['checks']['cache'], 'ok')
+
+    @patch('django.utils.log.AdminEmailHandler.emit')
+    @patch('statements.views.cache')
+    def test_health_check_reports_cache_failure(self, cache_client, _mail_emit):
+        cache_client.set.side_effect = RuntimeError('cache down')
+
+        response = self.client.get('/health/')
+
+        self.assertEqual(response.status_code, 503)
+        payload = response.json()
+        self.assertEqual(payload['status'], 'error')
+        self.assertEqual(payload['checks']['database'], 'ok')
+        self.assertEqual(payload['checks']['cache'], 'error')
+
+
 class StatementApiTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -943,6 +986,35 @@ class StatementApiTests(TestCase):
         self.assertEqual(usage.total_tokens, 19)
         self.assertGreaterEqual(usage.duration_ms, 0)
         from_bytes.assert_called_once()
+
+    @override_settings(GEMINI_MODEL='gemini-test-model')
+    @patch('statements.services.types.Part.from_bytes', return_value='pdf part')
+    @patch('statements.services._get_gemini_client')
+    def test_gemini_model_is_configurable(self, get_client, from_bytes):
+        response = SimpleNamespace(
+            text='{"ai_evaluation":"Summary","transactions":[]}',
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=1,
+                candidates_token_count=1,
+                total_token_count=2,
+            ),
+        )
+        get_client.return_value.models.generate_content.return_value = response
+
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                statement = BankStatement.objects.create(
+                    user=self.user,
+                    file=SimpleUploadedFile(
+                        'model.pdf', b'%PDF-1.4\n', content_type='application/pdf'
+                    ),
+                )
+                process_pdf_statement_with_gemini(statement)
+
+        call_kwargs = get_client.return_value.models.generate_content.call_args
+        self.assertEqual(call_kwargs.kwargs['model'], 'gemini-test-model')
+        usage = GeminiUsageRecord.objects.get(statement=statement)
+        self.assertEqual(usage.model_name, 'gemini-test-model')
 
     @patch('statements.services.types.Part.from_bytes', return_value='pdf part')
     @patch('statements.services._get_gemini_client')

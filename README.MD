@@ -109,7 +109,7 @@ This starts the web API, a Celery worker, a cron container, Redis and a local Po
 curl -i http://localhost:8001/api/statements/
 ```
 
-A `401 Unauthorized` response means the API is running and enforcing authentication. There is no dedicated health endpoint.
+A `401 Unauthorized` response means the API is running and enforcing authentication. Alternatively, `GET /health/` returns the health status without authentication.
 
 **5. Create an admin user** *(optional, for `/admin/`)*
 
@@ -167,7 +167,7 @@ A middleware layer applies rate limits per IP or per user, with stricter limits 
 | **PostgreSQL** | Stores users, statements, transactions, usage records, audit events and 2FA data. Either the local `db` container or a hosted Supabase database. |
 | **Cron container** (`cron`) | Same image as `web`; runs `manage.py delete_expired_data` daily at 03:00 UTC. |
 | **Media volume** | Holds uploaded PDFs under `statements/YYYY/MM/`. Shared by `web`, `worker` and `cron`. |
-| **Google Gemini** | Receives the PDF and returns structured JSON. Model name: `gemini-3.5-flash-lite` (hard-coded in `statements/services.py`). |
+| **Google Gemini** | Receives the PDF and returns structured JSON. Model name: `gemini-3.5-flash-lite` by default, configurable via the `GEMINI_MODEL` environment variable. |
 
 ```mermaid
 flowchart LR
@@ -317,6 +317,7 @@ All configuration is read from environment variables in `statement_ai/settings.p
 | `SECRET_KEY` | none | Django secret key. Required when `DEBUG` is off. Also keys the HMACs used for recovery codes and rate-limit identities, so rotating it invalidates existing recovery codes. |
 | `DEBUG` | `0` | `1` enables development mode: all hosts and CORS origins allowed, console email backend, `/media/` served by Django. Compose passes `DEBUG` without a default, so set it explicitly. |
 | `GEMINI_API_KEY` | none | Required when `DEBUG` is off. Processing fails without it. |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` | Gemini model used for statement extraction. |
 | `ALLOWED_HOSTS` | empty | Comma-separated hostnames. Only read when `DEBUG=0`. |
 | `CORS_ALLOWED_ORIGINS` | empty | Comma-separated origins. Only read when `DEBUG=0`. |
 | `NUM_PROXIES` | `0` | Number of trusted reverse proxies in front of the API. Controls how the client IP is determined for rate limiting. |
@@ -328,6 +329,16 @@ All configuration is read from environment variables in `statement_ai/settings.p
 |---|---|---|
 | `REDIS_URL` | none (Compose: `redis://redis:6379/1`) | Django cache, used for rate limits. Required when `DEBUG=0`. If unset in `DEBUG`, an in-process cache is used. |
 | `CELERY_BROKER_URL` | `redis://redis:6379/0` | Celery broker. |
+
+### Web server
+
+The `web` container runs gunicorn. These variables are read by Docker Compose and the container start command, not by `statement_ai/settings.py`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `GUNICORN_WORKERS` | `3` | Number of gunicorn worker processes. |
+| `GUNICORN_TIMEOUT` | `60` | Worker timeout in seconds. |
+| `GUNICORN_EXTRA_ARGS` | empty | Additional gunicorn arguments, e.g. `--reload` during development (the `.env.example` value). |
 
 ### Database
 
@@ -464,6 +475,8 @@ Exceeded limits return `429 Too Many Requests` with a `Retry-After` header. The 
 | GET | [`/transactions/<id>/`](#get-transactionsid) | Yes | One transaction |
 
 Other HTTP methods on these routes return `405 Method Not Allowed`. There are no endpoints to create, edit or delete individual transactions.
+
+Outside the API base URL, `GET /health/` returns `200` with `{"status": "ok", "checks": {...}}` when the database and cache are reachable, otherwise `503` with the failing check marked as `"error"`. It needs no authentication and is neither rate-limited nor usage-tracked; Docker Compose uses it for the `web` container health check.
 
 ### Conventions
 
@@ -1145,7 +1158,6 @@ Account deletion removes the user, statements, transactions and PDF files. Usage
 ### Known limitations
 
 - Transactions are read-only through the API, and there are no numeric reports or aggregates.
-- The Compose setup runs Django's development server; there is no production WSGI server (such as gunicorn) in `requirements.txt` or the Dockerfile.
 - The `statement_id` filter on `/transactions/` is not validated. A non-numeric value will most likely produce a `500` (inferred from the code, not tested).
 - Gemini output is trusted after JSON parsing.
 - There is no duplicate detection: uploading the same PDF twice creates two statements with their own transactions.
@@ -1159,7 +1171,7 @@ Account deletion removes the user, statements, transactions and PDF files. Usage
 
 ### Environment
 
-Development uses the same Docker Compose stack as the Quickstart with `DEBUG=1`. The project directory is bind-mounted into the `web`, `migrate`, `worker` and `cron` containers (`.:/app`), and `web` runs `runserver`, so code changes are picked up automatically for the API. The Celery worker does not auto-reload; restart it after changing task or service code:
+Development uses the same Docker Compose stack as the Quickstart with `DEBUG=1`. The project directory is bind-mounted into the `web`, `migrate`, `worker` and `cron` containers (`.:/app`), and `web` runs gunicorn with `--reload` (`GUNICORN_EXTRA_ARGS` in `.env.example`), so code changes are picked up automatically for the API. The Celery worker does not auto-reload; restart it after changing task or service code:
 
 ```bash
 docker compose restart worker
@@ -1229,7 +1241,7 @@ Logs go to stdout. Failed Gemini calls and processing exceptions are logged with
 
 | Service | Image / command | Purpose |
 |---|---|---|
-| `web` | built from `Dockerfile`, `python manage.py runserver 0.0.0.0:8001` | API and admin, published on host port `8001`. |
+| `web` | built from `Dockerfile`, gunicorn serving `statement_ai.wsgi:application` on port `8001` | API and admin, published on host port `8001`. Health check polls `GET /health/`. |
 | `migrate` | same image, `python manage.py migrate --noinput` | One-off; `web`, `worker` and `cron` wait for it to complete successfully. |
 | `worker` | same image, `celery -A statement_ai worker --loglevel=INFO --concurrency=2`, user `nobody` | Processes statements. |
 | `cron` | same image, `sh /app/cron/entrypoint.sh` | Daily retention cleanup. |
@@ -1282,7 +1294,7 @@ The `db` service has no Compose profile, so it is still defined as part of the p
 
 Things to address before exposing the stack to real users, all of which follow from the files in this repository:
 
-- Replace `runserver` with a production WSGI server and run behind a TLS-terminating reverse proxy. Set `NUM_PROXIES` to match, otherwise rate limits see the proxy's IP.
+- Put a TLS-terminating reverse proxy in front of gunicorn and set `NUM_PROXIES` to match, otherwise rate limits see the proxy's IP.
 - Do not publish PostgreSQL (`5432:5432` in `docker-compose.yml`) on a public interface, and change the default database password.
 - The source tree is bind-mounted into the containers (`.:/app`). For a production deployment you will probably want an image-only setup.
 - Use a managed or backed-up database. The `postgres_data` volume is local to the Docker host.

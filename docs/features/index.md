@@ -80,7 +80,7 @@ The worker sends the raw PDF and a prompt to Gemini. The prompt fixes:
 
 The reply is parsed as JSON and stored: the transactions replace any existing ones for that statement, and the evaluation is saved. Missing fields get defaults (type `FEE_CHARGE`, category `Miscellaneous & Other`, empty payee and description, amount `0`). The code does not check that Gemini's category and type values are on the allowed lists, so treat the lists as strongly expected rather than guaranteed. A transaction without a usable date makes the whole attempt fail.
 
-The model is `gemini-3.5-flash-lite`, set in `statements/services.py`.
+The model defaults to `gemini-3.5-flash-lite` and can be changed with the `GEMINI_MODEL` environment variable.
 
 ## Transactions
 

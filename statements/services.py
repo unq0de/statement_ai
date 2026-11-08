@@ -118,7 +118,7 @@ def process_pdf_statement_with_gemini(statement_instance):
     Note for amount: Outgoing payments MUST be negative numbers (e.g. -12.50). Incoming payments MUST be positive numbers (e.g. 1500.00).
     """
 
-    model_name = 'gemini-3.5-flash-lite'
+    model_name = settings.GEMINI_MODEL
     started_at = time.monotonic()
     try:
         response = client.models.generate_content(

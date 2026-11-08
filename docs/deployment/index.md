@@ -12,7 +12,7 @@ The repository ships a Docker Compose setup. It works well for local development
 
 | Service | Image and command | Purpose |
 | --- | --- | --- |
-| `web` | built from the `Dockerfile`, `python manage.py runserver 0.0.0.0:8001` | API and admin, published on host port `8001`. |
+| `web` | built from the `Dockerfile`, gunicorn serving `statement_ai.wsgi:application` on port `8001` | API and admin, published on host port `8001`. A health check polls `GET /health/` every 30 seconds. |
 | `migrate` | same image, `python manage.py migrate --noinput` | One-off. `web`, `worker` and `cron` wait for it to complete successfully. |
 | `worker` | same image, `celery -A statement_ai worker --loglevel=INFO --concurrency=2`, user `nobody` | Processes statements. |
 | `cron` | same image, `sh /app/cron/entrypoint.sh` | Daily retention cleanup. |
@@ -41,7 +41,7 @@ With `DEBUG=0` the application refuses to start unless the required settings are
 
 All of these follow from the files in this repository:
 
-- **Use a production server.** `web` runs Django's development server, and `requirements.txt` contains no WSGI server. Put a production-grade server and a TLS-terminating reverse proxy in front of the application, and set `NUM_PROXIES` to match; otherwise rate limits see the proxy's IP address.
+- **Put a TLS-terminating reverse proxy in front.** `web` runs gunicorn, which is a production WSGI server but should not face the internet directly. Set `NUM_PROXIES` to match; otherwise rate limits see the proxy's IP address.
 - **Do not publish PostgreSQL.** `docker-compose.yml` maps `5432:5432`. Remove that mapping or bind it to a private interface, and change `POSTGRES_PASSWORD`.
 - **Think about the bind mount.** The source tree is mounted into the containers (`.:/app`). A production setup will probably prefer image-only containers.
 - **Back up your data.** The `postgres_data` volume lives on the Docker host. Use a managed or backed-up database, and back up `media_data` as well. Make sure your web server does not expose the media directory.
@@ -55,6 +55,7 @@ Setting `DB_ENGINE=supabase` makes the application connect to a hosted Supabase 
 
 ## Scaling notes
 
+- The web container starts three gunicorn workers. Raise `GUNICORN_WORKERS` or run more web containers for more concurrent API requests.
 - The worker runs two processes. Raise `--concurrency` in `docker-compose.yml`, or run more worker containers, to process more statements in parallel. Each running job holds one Gemini request.
 - `GEMINI_MONTHLY_LIMIT_PER_USER` and the upload limit of 5 per hour per user cap how much each account can send to Gemini.
 - Rate-limit counters are shared across web processes only through Redis, so keep `REDIS_URL` pointed at a shared instance.

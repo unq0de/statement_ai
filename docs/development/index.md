@@ -10,7 +10,7 @@ This page is for people who want to work on the code: the development environmen
 
 ## Environment
 
-Develop with the same Docker Compose stack as in [Getting started]({{ '/getting-started/' | relative_url }}), with `DEBUG=1`. The project directory is bind-mounted into the `web`, `migrate`, `worker` and `cron` containers, and `web` runs Django's `runserver`, so code changes take effect without a rebuild. The Celery worker does not reload by itself. After changing task or service code, restart it:
+Develop with the same Docker Compose stack as in [Getting started]({{ '/getting-started/' | relative_url }}), with `DEBUG=1`. The project directory is bind-mounted into the `web`, `migrate`, `worker` and `cron` containers, and `web` runs gunicorn; with `GUNICORN_EXTRA_ARGS=--reload` (the `.env.example` value) code changes take effect without a rebuild. The Celery worker does not reload by itself. After changing task or service code, restart it:
 
 ```bash
 docker compose restart worker

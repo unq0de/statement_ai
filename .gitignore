@@ -6,6 +6,7 @@
 # Django / local database & media
 db.sqlite3
 media/
+staticfiles/
 /testdata/
 
 # Python

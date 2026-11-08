@@ -75,7 +75,7 @@ A project-wide exception handler (`statements/exceptions.py`) converts DRF throt
 | `409` | Conflict: 2FA is already enabled |
 | `429` | A rate limit or the monthly processing limit was reached. The response has a `Retry-After` header. |
 | `500` | Unexpected server error |
-| `503` | An upload could not be stored or queued |
+| `503` | An upload could not be stored or queued; or `/health/` found an unreachable dependency |
 
 ## Rate limits
 
@@ -111,6 +111,7 @@ Requests over a limit receive `429 Too Many Requests`, an `error` field and a `R
 | `GET` | `/api/analytics/` | Yes | Alias of the analytics endpoint |
 | `GET` | `/api/transactions/` | Yes | List, filter and search transactions |
 | `GET` | `/api/transactions/<id>/` | Yes | Retrieve one transaction |
+| `GET` | `/health/` | No | Health probe for the database and cache. Outside `/api/`, so no authentication, rate limits or usage tracking. `200` when healthy, `503` otherwise |
 
 ## Related pages
 
